@@ -23,7 +23,7 @@ class TestSMAGene:
         gene = SMAGene()
         assert isinstance(gene, SMAGene)
         assert gene.value is not None
-        assert isinstance(gene.value, float)
+        assert isinstance(gene.value, int)
     
     def test_compute(self, sma_gene, price_data):
         """Test SMA computation"""
@@ -32,12 +32,12 @@ class TestSMAGene:
         
         assert isinstance(result, pd.Series)
         assert len(result) == len(price_data)
-        assert pd.isna(result[0])  # First two values should be NaN
-        assert pd.isna(result[1])  # because period is 3
+        assert pd.isna(result.iloc[0])  # First two values should be NaN
+        assert pd.isna(result.iloc[1])  # because period is 3
         
         # Test some specific values
         expected_value = (101.0 + 102.0 + 103.0) / 3
-        assert np.isclose(result[3], expected_value)
+        assert np.isclose(result.iloc[3], expected_value)
     
     def test_compute_with_invalid_input(self, sma_gene):
         """Test compute method with invalid input"""
@@ -80,8 +80,8 @@ class TestSMAGene:
         assert isinstance(child2, SMAGene)
         
         # Check that children have integer periods
-        assert isinstance(child1.value, float) and child1.value.is_integer()
-        assert isinstance(child2.value, float) and child2.value.is_integer()
+        assert isinstance(child1.value, int)
+        assert isinstance(child2.value, int)
         
         # Check that children values are between parents
         assert min(parent1.value, parent2.value) <= max(child1.value, child2.value)
@@ -100,8 +100,7 @@ class TestSMAGene:
                 break
         
         assert mutated, "Value should change after multiple mutations"
-        assert isinstance(sma_gene.value, float)
-        assert sma_gene.value.is_integer()
+        assert isinstance(sma_gene.value, int)
     
     def test_to_dict(self, sma_gene):
         """Test dictionary representation"""

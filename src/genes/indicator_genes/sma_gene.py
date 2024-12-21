@@ -1,4 +1,4 @@
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional
 import pandas as pd
 import talib
 from deap import tools
@@ -8,25 +8,38 @@ from ...utils.config_loader import ConfigLoader
 class SMAGene(BaseGene):
     """Gene class for Simple Moving Average indicator using TA-Lib and DEAP"""
     
-    def __init__(self):
-        """Initialize SMA gene with configuration from config file"""
-        config = ConfigLoader.get_indicator_config("sma")
-        gene_config = GeneConfig(
-            name=config["name"],
-            min_value=config["min_period"],
-            max_value=config["max_period"],
-            step=config["step"],
-            mutation_rate=config["mutation_rate"],
-            mutation_sigma=config["mutation_range"]
-        )
+    def __init__(self, gene_config: Optional[GeneConfig] = None):
+        """Initialize SMA gene with configuration from config file or provided config"""
+        if gene_config is None:
+            config_loader = ConfigLoader()
+            config = config_loader.get_indicator_config("sma")
+            gene_config = GeneConfig(
+                name=config["name"],
+                min_value=config["min_period"],
+                max_value=config["max_period"],
+                step=config["step"],
+                mutation_rate=config["mutation_rate"],
+                mutation_sigma=config["mutation_range"]
+            )
         super().__init__(gene_config)
         
         # Override mutation operator for integer values
-        self.toolbox.register("mutate", tools.mutGaussian, 
-                            mu=0, sigma=self.config.mutation_sigma, 
-                            indpb=self.config.mutation_rate)
+        # Scale mutation sigma based on the value range
+        value_range = self.config.max_value - self.config.min_value
+        scaled_sigma = value_range * self.config.mutation_sigma
         
-        self.randomize()
+        def mutate_int(individual):
+            # Apply Gaussian mutation
+            individual, = tools.mutGaussian(individual, mu=0, sigma=scaled_sigma, indpb=self.config.mutation_rate)
+            # Round to integer and validate
+            individual[0] = self.validate_and_clip_value(individual[0])
+            return individual,
+            
+        self.toolbox.register("mutate", mutate_int)
+        
+        # Initialize with random value and ensure it's an integer
+        individual = self.toolbox.individual()
+        self._value = [int(round(individual[0]))]
         
         # Cache for computed values to avoid recalculation
         self._cache = {}
@@ -84,7 +97,7 @@ class SMAGene(BaseGene):
             float: Validated and clipped value
         """
         clipped = super().validate_and_clip_value(value)
-        return round(clipped)  # Round to nearest integer
+        return int(round(clipped))  # Round to nearest integer and convert to int
     
     def crossover(self, other: 'SMAGene') -> tuple['SMAGene', 'SMAGene']:
         """
@@ -93,8 +106,8 @@ class SMAGene(BaseGene):
         child1, child2 = super().crossover(other)
         
         # Ensure integer values
-        child1.value = round(child1.value)
-        child2.value = round(child2.value)
+        child1.value = int(round(child1.value))
+        child2.value = int(round(child2.value))
         
         return child1, child2
     

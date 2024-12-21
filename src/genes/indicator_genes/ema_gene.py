@@ -1,30 +1,79 @@
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional
 import pandas as pd
+import numpy as np
 import talib
-from deap import tools
+import random
+from deap import tools, base, creator
 from ..base_gene import BaseGene, GeneConfig
 from ...utils.config_loader import ConfigLoader
 
 class EMAGene(BaseGene):
     """Gene class for Exponential Moving Average indicator using TA-Lib and DEAP"""
     
-    def __init__(self):
+    def __init__(self, config: Optional[GeneConfig] = None):
         """Initialize EMA gene with configuration"""
-        config = ConfigLoader.get_indicator_config("ema")
-        gene_config = GeneConfig(
-            name=config["name"],
-            min_value=config["min_period"],
-            max_value=config["max_period"],
-            step=config["step"],
-            mutation_rate=config["mutation_rate"],
-            mutation_sigma=config["mutation_range"]
-        )
-        super().__init__(gene_config)
-        self.toolbox.register("mutate", tools.mutGaussian, 
-                            mu=0, sigma=self.config.mutation_sigma, 
-                            indpb=self.config.mutation_rate)
-        self.randomize()
+        if config is None:
+            config_loader = ConfigLoader()
+            indicator_config = config_loader.get_indicator_config("ema")
+            config = GeneConfig(
+                name=indicator_config["name"],
+                min_value=indicator_config["min_period"],
+                max_value=indicator_config["max_period"],
+                step=indicator_config["step"],
+                mutation_rate=indicator_config["mutation_rate"],
+                mutation_sigma=indicator_config["mutation_range"]
+            )
+        super().__init__(config)
         self._cache = {}
+
+    def _register_gene(self):
+        """Register the gene type and required operators in DEAP"""
+        # Create a new Fitness class if not already created
+        if not hasattr(creator, "FitnessMax"):
+            creator.create("FitnessMax", base.Fitness, weights=(1.0,))
+        
+        # Create a gene class specific to this type if not already created
+        gene_type_name = f"{self.__class__.__name__}Class"
+        if not hasattr(creator, gene_type_name):
+            creator.create(gene_type_name, list, fitness=creator.FitnessMax)
+        
+        # Register genetic operators in the toolbox
+        self.toolbox = base.Toolbox()
+        
+        # Usa random.randint per generare valori interi
+        self.toolbox.register("attr_int", lambda: float(random.randint(
+            int(self.config.min_value), int(self.config.max_value)
+        )))
+        self.toolbox.register("individual", tools.initRepeat, 
+                            getattr(creator, gene_type_name), 
+                            self.toolbox.attr_int, n=1)
+        self.toolbox.register("population", tools.initRepeat, 
+                            list, self.toolbox.individual)
+        
+        # Usa operatori DEAP specifici per valori numerici
+        self.toolbox.register("mate", tools.cxBlend, alpha=0.5)
+        self.toolbox.register("mutate", self._custom_mutation)
+        self.toolbox.register("select", tools.selTournament, tournsize=3)
+        self.toolbox.register("evaluate", self._evaluate_individual)
+    
+    def _custom_mutation(self, individual):
+        """Custom mutation operator that ensures integer values and changes"""
+        current = int(individual[0])
+        min_val = int(self.config.min_value)
+        max_val = int(self.config.max_value)
+        
+        # Calcola un offset casuale che garantisce un cambio di valore
+        offset = random.choice([-2, -1, 1, 2])
+        new_value = current + offset
+        
+        # Assicura che il nuovo valore sia nell'intervallo valido
+        if new_value < min_val:
+            new_value = min_val + abs(offset)
+        elif new_value > max_val:
+            new_value = max_val - abs(offset)
+        
+        individual[0] = float(new_value)
+        return individual,
     
     def compute(self, data: pd.Series) -> pd.Series:
         """
@@ -46,7 +95,8 @@ class EMAGene(BaseGene):
         period = int(self.value)
         result = pd.Series(
             talib.EMA(data, timeperiod=period),
-            index=data.index
+            index=data.index,
+            name=f'EMA_{period}'
         )
         
         self._cache[cache_key] = result
@@ -71,9 +121,9 @@ class EMAGene(BaseGene):
         return (fitness,)
     
     def validate_and_clip_value(self, value: float) -> float:
-        """Ensure integer periods"""
+        """Ensure valid periods while maintaining float type"""
         clipped = super().validate_and_clip_value(value)
-        return round(clipped)
+        return float(round(clipped))
     
     def crossover(self, other: 'EMAGene') -> tuple['EMAGene', 'EMAGene']:
         """Custom crossover that maintains period hierarchy if needed"""

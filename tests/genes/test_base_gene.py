@@ -3,8 +3,10 @@ import pandas as pd
 from deap import base, creator
 from src.genes.base_gene import BaseGene, GeneConfig
 
-class TestGene(BaseGene):
-    """Concrete implementation of BaseGene for testing"""
+# Concrete implementation of BaseGene for testing
+# Definita fuori dalla classe di test per evitare problemi con pytest
+class ConcreteGene(BaseGene):
+    """A concrete implementation of BaseGene used only for testing"""
     def compute(self, data):
         return data * float(self.value)
 
@@ -23,12 +25,12 @@ def gene_config():
 @pytest.fixture
 def test_gene(gene_config):
     """Fixture that provides a test gene instance"""
-    return TestGene(gene_config)
+    return ConcreteGene(gene_config)
 
 class TestBaseGene:
     def test_initialization(self, gene_config):
         """Test gene initialization"""
-        gene = TestGene(gene_config)
+        gene = ConcreteGene(gene_config)
         assert gene.config == gene_config
         assert hasattr(gene, 'toolbox')
         assert gene._value is not None
@@ -71,16 +73,16 @@ class TestBaseGene:
     
     def test_crossover(self, gene_config):
         """Test crossover operation"""
-        parent1 = TestGene(gene_config)
-        parent2 = TestGene(gene_config)
+        parent1 = ConcreteGene(gene_config)
+        parent2 = ConcreteGene(gene_config)
         
         parent1.value = 0.2
         parent2.value = 0.8
         
         child1, child2 = parent1.crossover(parent2)
         
-        assert isinstance(child1, TestGene)
-        assert isinstance(child2, TestGene)
+        assert isinstance(child1, ConcreteGene)
+        assert isinstance(child2, ConcreteGene)
         assert 0.0 <= child1.value <= 1.0
         assert 0.0 <= child2.value <= 1.0
         
@@ -111,7 +113,7 @@ class TestBaseGene:
         
         assert gene_dict["name"] == "test_gene"
         assert gene_dict["value"] == 0.5
-        assert gene_dict["type"] == "TestGene"
+        assert gene_dict["type"] == "ConcreteGene"
     
     def test_compute(self, test_gene):
         """Test compute method"""

@@ -1,6 +1,7 @@
 from typing import Any, Tuple
 import pandas as pd
 import talib
+import random
 from deap import tools, creator, base
 from ..base_gene import BaseGene, GeneConfig
 from ...utils.config_loader import ConfigLoader
@@ -10,7 +11,8 @@ class MACDGene(BaseGene):
     
     def __init__(self):
         """Initialize MACD gene with configuration from config file"""
-        config = ConfigLoader.get_indicator_config("macd")
+        config_loader = ConfigLoader()
+        config = config_loader.get_indicator_config("macd")
         
         # MACD needs three parameters: fast period, slow period, and signal period
         self.fast_period = config["fast_period"]["default"]
@@ -46,7 +48,9 @@ class MACDGene(BaseGene):
                             self.config.min_value, 
                             self.config.max_value)
         
-        self.toolbox.register("individual", tools.initCycle, creator.Individual,
+        gene_type_name = f"{self.__class__.__name__}Class"
+        self.toolbox.register("individual", tools.initCycle, 
+                            getattr(creator, gene_type_name),
                             (self.toolbox.attr_fast, self.toolbox.attr_slow, 
                              self.toolbox.attr_signal), n=1)
     
@@ -107,9 +111,9 @@ class MACDGene(BaseGene):
         return (fitness,)
     
     @property
-    def value(self) -> tuple[int, int, int]:
+    def value(self) -> list:
         """Get the current MACD parameters"""
-        return (self.fast_period, self.slow_period, self.signal_period)
+        return [self.fast_period, self.slow_period, self.signal_period]
     
     @value.setter
     def value(self, new_value: list) -> None:
@@ -123,9 +127,35 @@ class MACDGene(BaseGene):
         if fast >= slow:
             fast, slow = slow - 1, slow
         
+        self._value = [fast, slow, signal]
         self.fast_period = fast
         self.slow_period = slow
         self.signal_period = signal
+    
+    def mutate(self) -> None:
+        """Mutate the MACD parameters"""
+        # Perform mutation using DEAP's operator
+        mutated_value, = self.toolbox.mutate(self._value)
+        
+        # Update the values ensuring they are valid
+        self.value = mutated_value
+    
+    def crossover(self, other: 'MACDGene') -> tuple['MACDGene', 'MACDGene']:
+        """Perform crossover with another MACD gene"""
+        if not isinstance(other, self.__class__):
+            raise ValueError(f"Cannot crossover with gene of different type: {type(other)}")
+        
+        # Create new genes with same configuration
+        child1, child2 = MACDGene(), MACDGene()
+        
+        # Perform crossover using DEAP's operator
+        offspring1, offspring2 = self.toolbox.mate(self._value, other._value)
+        
+        # Set the values for children
+        child1.value = offspring1
+        child2.value = offspring2
+        
+        return child1, child2
     
     def to_dict(self) -> dict:
         """Dictionary representation with MACD-specific information"""

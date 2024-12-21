@@ -13,6 +13,17 @@ class GeneConfig:
     step: float = 0.1
     mutation_rate: float = 0.1
     mutation_sigma: float = 0.2
+    
+    def __post_init__(self):
+        """Validate configuration parameters after initialization"""
+        if self.min_value >= self.max_value:
+            raise ValueError("min_value must be less than max_value")
+        if self.step <= 0:
+            raise ValueError("step must be positive")
+        if not (0 <= self.mutation_rate <= 1):
+            raise ValueError("mutation_rate must be between 0 and 1")
+        if self.mutation_sigma <= 0:
+            raise ValueError("mutation_sigma must be positive")
 
 class BaseGene(ABC):
     """Abstract base class for all genes in the trading system using DEAP"""
@@ -25,11 +36,13 @@ class BaseGene(ABC):
             config (GeneConfig): Configuration parameters for the gene
         """
         self.config = config
-        self._value = None
         self.validate_config()
         
         # Register gene in DEAP
         self._register_gene()
+        
+        # Initialize with random value
+        self.randomize()
     
     def _register_gene(self):
         """Register the gene type and required operators in DEAP"""
@@ -61,15 +74,9 @@ class BaseGene(ABC):
         self.toolbox.register("evaluate", self._evaluate_individual)
     
     def validate_config(self) -> None:
-        """Validate the configuration parameters"""
-        if self.config.min_value >= self.config.max_value:
-            raise ValueError("min_value must be less than max_value")
-        if self.config.step <= 0:
-            raise ValueError("step must be positive")
-        if not (0 <= self.config.mutation_rate <= 1):
-            raise ValueError("mutation_rate must be between 0 and 1")
-        if self.config.mutation_sigma <= 0:
-            raise ValueError("mutation_sigma must be positive")
+        """Validate that configuration exists"""
+        if not self.config:
+            raise ValueError("Gene configuration is required")
     
     @property
     def value(self) -> float:
@@ -95,7 +102,11 @@ class BaseGene(ABC):
             raise ValueError(f"Cannot crossover with gene of different type: {type(other)}")
         
         child1, child2 = map(self.__class__, [self.config, self.config])
-        child1._value, child2._value = self.toolbox.mate(self._value, other._value)
+        offspring1, offspring2 = self.toolbox.mate(self._value, other._value)
+        
+        # Validate and clip the offspring values
+        child1._value = [self.validate_and_clip_value(offspring1[0])]
+        child2._value = [self.validate_and_clip_value(offspring2[0])]
         
         return child1, child2
     

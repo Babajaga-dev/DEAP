@@ -1,6 +1,7 @@
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional
 import pandas as pd
 import talib
+import random
 from deap import tools, creator, base
 from ..base_gene import BaseGene, GeneConfig
 from ...utils.config_loader import ConfigLoader
@@ -8,22 +9,27 @@ from ...utils.config_loader import ConfigLoader
 class BollingerGene(BaseGene):
     """Gene class for Bollinger Bands indicator using TA-Lib and DEAP"""
     
-    def __init__(self):
+    def __init__(self, gene_config: Optional[GeneConfig] = None):
         """Initialize Bollinger Bands gene with configuration"""
-        config = ConfigLoader.get_indicator_config("bollinger")
-        
-        # We need period and number of standard deviations
-        self.period = config["default_period"]
-        self.num_std = config["default_std"]  # Usually 2.0
-        
-        gene_config = GeneConfig(
-            name=config["name"],
-            min_value=config["min_period"],
-            max_value=config["max_period"],
-            step=config["step"],
-            mutation_rate=config["mutation_rate"],
-            mutation_sigma=config["mutation_range"]
-        )
+        if gene_config is None:
+            config_loader = ConfigLoader()
+            config = config_loader.get_indicator_config("bollinger")
+            
+            # We need period and number of standard deviations
+            self.period = config["default_period"]
+            self.num_std = config["default_std"]  # Usually 2.0
+            
+            gene_config = GeneConfig(
+                name=config["name"],
+                min_value=config["min_period"],
+                max_value=config["max_period"],
+                step=config["step"],
+                mutation_rate=config["mutation_rate"],
+                mutation_sigma=config["mutation_range"]
+            )
+        else:
+            self.period = gene_config.min_value
+            self.num_std = 2.0  # Default value
         super().__init__(gene_config)
         
         # Override genetic operators for multiple parameters
@@ -33,12 +39,15 @@ class BollingerGene(BaseGene):
     
     def _register_bollinger_operators(self):
         """Register Bollinger-specific genetic operators"""
+        gene_type_name = f"{self.__class__.__name__}Class"
+        
         self.toolbox.register("attr_period", random.randint,
                             self.config.min_value,
                             self.config.max_value)
         self.toolbox.register("attr_std", random.uniform, 1.0, 3.0)
         
-        self.toolbox.register("individual", tools.initCycle, creator.Individual,
+        self.toolbox.register("individual", tools.initCycle, 
+                            getattr(creator, gene_type_name),
                             (self.toolbox.attr_period, self.toolbox.attr_std), 
                             n=1)
     
@@ -104,13 +113,25 @@ class BollingerGene(BaseGene):
     @value.setter
     def value(self, new_value: list) -> None:
         """Set Bollinger Bands parameters with validation"""
+        if isinstance(new_value, list) and len(new_value) == 1 and isinstance(new_value[0], list):
+            new_value = new_value[0]  # Unwrap nested list from DEAP
+            
         if len(new_value) != 2:
             raise ValueError("Bollinger Bands requires two parameters")
         
         period, num_std = new_value
         self.period = int(self.validate_and_clip_value(period))
         self.num_std = max(1.0, min(3.0, float(num_std)))  # Clip std between 1 and 3
+        self._value = [period, num_std]  # Update internal DEAP value
     
+    def mutate(self) -> None:
+        """Mutate the gene using DEAP's mutation operator"""
+        self._value, = self.toolbox.mutate(self._value)
+        # Clip values and update period and num_std
+        self.period = int(self.validate_and_clip_value(self._value[0]))
+        self.num_std = max(1.0, min(3.0, float(self._value[1])))
+        self._value = [self.period, self.num_std]
+
     def to_dict(self) -> dict:
         """Dictionary representation with Bollinger-specific information"""
         base_dict = super().to_dict()

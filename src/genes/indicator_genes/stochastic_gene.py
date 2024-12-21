@@ -1,6 +1,7 @@
 from typing import Any, Tuple
 import pandas as pd
 import talib
+import random
 from deap import tools, creator, base
 from ..base_gene import BaseGene, GeneConfig
 from ...utils.config_loader import ConfigLoader
@@ -8,9 +9,18 @@ from ...utils.config_loader import ConfigLoader
 class StochasticGene(BaseGene):
     """Gene class for Stochastic Oscillator using TA-Lib and DEAP"""
     
-    def __init__(self):
-        """Initialize Stochastic gene with configuration"""
-        config = ConfigLoader.get_indicator_config("stochastic")
+    def __init__(self, config_loader: ConfigLoader = None):
+        """
+        Initialize Stochastic gene with configuration
+        
+        Args:
+            config_loader (ConfigLoader, optional): Configuration loader instance
+        """
+        if config_loader is None:
+            config_loader = ConfigLoader()
+            
+        self._config_loader = config_loader  # Store for crossover operations
+        config = config_loader.get_indicator_config("stochastic")
         
         # Multiple parameters for Stochastic
         self.fastk_period = config["fastk_period"]["default"]  # Default 14
@@ -38,7 +48,9 @@ class StochasticGene(BaseGene):
         self.toolbox.register("attr_slowk", random.randint, 1, 10)
         self.toolbox.register("attr_slowd", random.randint, 1, 10)
         
-        self.toolbox.register("individual", tools.initCycle, creator.Individual,
+        gene_type_name = f"{self.__class__.__name__}Class"
+        self.toolbox.register("individual", tools.initCycle, 
+                            getattr(creator, gene_type_name),
                             (self.toolbox.attr_fastk, self.toolbox.attr_slowk, 
                              self.toolbox.attr_slowd), n=1)
     
@@ -111,10 +123,65 @@ class StochasticGene(BaseGene):
         if len(new_value) != 3:
             raise ValueError("Stochastic requires three parameters")
         
+        # Validate fastk_period (5-30)
+        if new_value[0] < 5:
+            raise ValueError("fastk_period must be at least 5")
         self.fastk_period = int(self.validate_and_clip_value(new_value[0]))
-        self.slowk_period = max(1, min(10, int(new_value[1])))
-        self.slowd_period = max(1, min(10, int(new_value[2])))
+        
+        # Validate slowk_period (1-10)
+        if new_value[1] < 1:
+            raise ValueError("slowk_period must be at least 1")
+        self.slowk_period = min(10, int(new_value[1]))
+        
+        # Validate slowd_period (1-10)
+        if new_value[2] < 1:
+            raise ValueError("slowd_period must be at least 1")
+        self.slowd_period = min(10, int(new_value[2]))
     
+    def crossover(self, other: 'StochasticGene') -> tuple['StochasticGene', 'StochasticGene']:
+        """Perform crossover with another Stochastic gene"""
+        if not isinstance(other, self.__class__):
+            raise ValueError(f"Cannot crossover with gene of different type: {type(other)}")
+        
+        # Create new instances with same config loader
+        child1 = self.__class__(self._config_loader)
+        child2 = self.__class__(self._config_loader)
+        
+        # Perform arithmetic crossover for each parameter
+        alpha = random.random()
+        child1.value = [
+            round(alpha * self.fastk_period + (1 - alpha) * other.fastk_period),
+            round(alpha * self.slowk_period + (1 - alpha) * other.slowk_period),
+            round(alpha * self.slowd_period + (1 - alpha) * other.slowd_period)
+        ]
+        child2.value = [
+            round((1 - alpha) * self.fastk_period + alpha * other.fastk_period),
+            round((1 - alpha) * self.slowk_period + alpha * other.slowk_period),
+            round((1 - alpha) * self.slowd_period + alpha * other.slowd_period)
+        ]
+        
+        return child1, child2
+
+    def mutate(self) -> None:
+        """Perform mutation on all three parameters"""
+        # Mutate fastk_period
+        if random.random() < self.config.mutation_rate:
+            self.fastk_period = max(5, min(30, round(
+                self.fastk_period + random.gauss(0, self.config.mutation_sigma * 5)
+            )))
+        
+        # Mutate slowk_period
+        if random.random() < self.config.mutation_rate:
+            self.slowk_period = max(1, min(10, round(
+                self.slowk_period + random.gauss(0, self.config.mutation_sigma * 2)
+            )))
+        
+        # Mutate slowd_period
+        if random.random() < self.config.mutation_rate:
+            self.slowd_period = max(1, min(10, round(
+                self.slowd_period + random.gauss(0, self.config.mutation_sigma * 2)
+            )))
+
     def to_dict(self) -> dict:
         """Dictionary representation with Stochastic-specific information"""
         base_dict = super().to_dict()
