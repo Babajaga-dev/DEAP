@@ -1,0 +1,116 @@
+indicators:
+  sma:
+    name: "Simple Moving Average"
+    min_period: 2
+    max_period: 200
+    default_period: 20
+    mutation_rate: 0.1
+    mutation_range: 0.2
+    step: 1
+  
+  rsi:
+    name: "Relative Strength Index"
+    min_period: 2
+    max_period: 50
+    default_period: 14
+    mutation_rate: 0.1
+    mutation_range: 0.2
+    step: 1
+
+  macd:
+    name: "Moving Average Convergence Divergence"
+    fast_period:
+      min: 8
+      max: 20
+      default: 12
+    slow_period:
+      min: 20
+      max: 40
+      default: 26
+    signal_period:
+      min: 5
+      max: 15
+      default: 9
+    mutation_rate: 0.1
+    mutation_range: 0.2
+    step: 1
+
+  bollinger:
+    name: "Bollinger Bands"
+    min_period: 5
+    max_period: 50
+    default_period: 20
+    default_std: 2.0
+    mutation_rate: 0.1
+    mutation_range: 0.2
+    step: 1
+
+  stochastic:
+    name: "Stochastic Oscillator"
+    fastk_period:
+      min: 5
+      max: 30
+      default: 14
+    slowk_period:
+      min: 1
+      max: 10
+      default: 3
+    slowd_period:
+      min: 1
+      max: 10
+      default: 3
+    mutation_rate: 0.1
+    mutation_range: 0.2
+    step: 1
+
+  atr:
+    name: "Average True Range"
+    min_period: 5
+    max_period: 50
+    default_period: 14
+    mutation_rate: 0.1
+    mutation_range: 0.2
+    step: 1
+
+  ema:
+    name: "Exponential Moving Average"
+    min_period: 2
+    max_period: 200
+    default_period: 20
+    mutation_rate: 0.1
+    mutation_range: 0.2
+    step: 1
+    common_periods: [9, 21, 50, 200]
+
+  obv:
+    name: "On Balance Volume"
+    signal_period:
+      min: 5
+      max: 40
+      default: 20
+    mutation_rate: 0.1
+    mutation_range: 0.2
+    step: 1
+    divergence_window: 20  # Default window for divergence analysis
+
+# Configurazioni generali degli indicatori
+general:
+  optimization:
+    population_size: 50
+    generations: 100
+    crossover_probability: 0.7
+    mutation_probability: 0.2
+    tournament_size: 3
+
+  validation:
+    min_data_points: 100  # Minimo numero di punti dati richiesti
+    max_lookback: 200    # Massimo periodo di lookback per qualsiasi indicatore
+    
+  execution:
+    cache_size: 1000     # Dimensione della cache per i risultati degli indicatori
+    parallel_compute: true # Abilita il calcolo parallelo quando possibile
+
+  risk_management:
+    max_position_size: 0.1  # Massima dimensione della posizione come frazione del capitale
+    max_risk_per_trade: 0.02 # Massimo rischio per trade come frazione del capitale
+    min_stop_distance: 0.01  # Distanza minima dello stop loss come frazione del prezzo
