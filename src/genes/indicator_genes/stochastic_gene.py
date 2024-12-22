@@ -164,23 +164,31 @@ class StochasticGene(BaseGene):
 
     def mutate(self) -> None:
         """Perform mutation on all three parameters"""
+        # Ensure at least one parameter will be mutated
+        param_to_mutate = random.randint(0, 2)  # Garantisce che almeno un parametro venga mutato
+        
+        # Scale mutation sigma based on parameter ranges
+        fastk_range = self.config.max_value - self.config.min_value
+        slowk_range = 9  # Range 1-10
+        slowd_range = 9  # Range 1-10
+        
         # Mutate fastk_period
-        if random.random() < self.config.mutation_rate:
-            self.fastk_period = max(5, min(30, round(
-                self.fastk_period + random.gauss(0, self.config.mutation_sigma * 5)
-            )))
+        if random.random() < self.config.mutation_rate or param_to_mutate == 0:
+            scaled_sigma = fastk_range * self.config.mutation_sigma
+            mutation = random.gauss(0, scaled_sigma)
+            self.fastk_period = max(5, min(30, round(self.fastk_period + mutation)))
         
         # Mutate slowk_period
-        if random.random() < self.config.mutation_rate:
-            self.slowk_period = max(1, min(10, round(
-                self.slowk_period + random.gauss(0, self.config.mutation_sigma * 2)
-            )))
+        if random.random() < self.config.mutation_rate or param_to_mutate == 1:
+            scaled_sigma = slowk_range * self.config.mutation_sigma
+            mutation = random.gauss(0, scaled_sigma)
+            self.slowk_period = max(1, min(10, round(self.slowk_period + mutation)))
         
         # Mutate slowd_period
-        if random.random() < self.config.mutation_rate:
-            self.slowd_period = max(1, min(10, round(
-                self.slowd_period + random.gauss(0, self.config.mutation_sigma * 2)
-            )))
+        if random.random() < self.config.mutation_rate or param_to_mutate == 2:
+            scaled_sigma = slowd_range * self.config.mutation_sigma
+            mutation = random.gauss(0, scaled_sigma)
+            self.slowd_period = max(1, min(10, round(self.slowd_period + mutation)))
 
     def to_dict(self) -> dict:
         """Dictionary representation with Stochastic-specific information"""

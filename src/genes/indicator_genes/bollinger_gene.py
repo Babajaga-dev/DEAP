@@ -1,4 +1,4 @@
-from typing import Any, Tuple, Optional
+from typing import Any, Tuple, Optional, Union
 import pandas as pd
 import talib
 import random
@@ -9,9 +9,29 @@ from ...utils.config_loader import ConfigLoader
 class BollingerGene(BaseGene):
     """Gene class for Bollinger Bands indicator using TA-Lib and DEAP"""
     
-    def __init__(self, gene_config: Optional[GeneConfig] = None):
+    def __init__(self, config_loader_or_gene_config: Optional[Union[ConfigLoader, GeneConfig]] = None):
         """Initialize Bollinger Bands gene with configuration"""
-        if gene_config is None:
+        if isinstance(config_loader_or_gene_config, ConfigLoader):
+            config_loader = config_loader_or_gene_config
+            config = config_loader.get_indicator_config("bollinger")
+            
+            # We need period and number of standard deviations
+            self.period = config["default_period"]
+            self.num_std = config["default_std"]  # Usually 2.0
+            
+            gene_config = GeneConfig(
+                name=config["name"],
+                min_value=config["min_period"],
+                max_value=config["max_period"],
+                step=config["step"],
+                mutation_rate=config["mutation_rate"],
+                mutation_sigma=config["mutation_range"]
+            )
+        elif isinstance(config_loader_or_gene_config, GeneConfig):
+            gene_config = config_loader_or_gene_config
+            self.period = gene_config.min_value
+            self.num_std = 2.0  # Default value
+        else:
             config_loader = ConfigLoader()
             config = config_loader.get_indicator_config("bollinger")
             
@@ -27,9 +47,6 @@ class BollingerGene(BaseGene):
                 mutation_rate=config["mutation_rate"],
                 mutation_sigma=config["mutation_range"]
             )
-        else:
-            self.period = gene_config.min_value
-            self.num_std = 2.0  # Default value
         super().__init__(gene_config)
         
         # Override genetic operators for multiple parameters

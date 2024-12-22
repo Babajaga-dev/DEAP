@@ -1,4 +1,4 @@
-from typing import Any, Tuple
+from typing import Any, Tuple, Optional, Union
 import pandas as pd
 import numpy as np
 import talib
@@ -9,37 +9,62 @@ from ...utils.config_loader import ConfigLoader
 class RSIGene(BaseGene):
     """Gene class for Relative Strength Index indicator using TA-Lib and DEAP"""
     
-    def __init__(self, config_loader: ConfigLoader = None):
+    def __init__(self, config_loader_or_gene_config: Optional[Union[ConfigLoader, GeneConfig]] = None):
         """
         Initialize RSI gene with configuration
         
         Args:
-            config_loader (ConfigLoader, optional): Configuration loader instance
+            config_loader_or_gene_config: Either a ConfigLoader instance or a GeneConfig instance
         """
-        if config_loader is None:
-            config_loader = ConfigLoader()
+        if isinstance(config_loader_or_gene_config, ConfigLoader):
+            config_loader = config_loader_or_gene_config
+            self._config_loader = config_loader  # Store for crossover operations
+            config = config_loader.get_indicator_config("rsi")
             
-        self._config_loader = config_loader  # Store for crossover operations
-        config = config_loader.get_indicator_config("rsi")
-        
-        # Ensure we have default values if configuration is incomplete
-        min_period = 2
-        max_period = 50
-        if "period" in config and isinstance(config["period"], dict):
-            min_period = config["period"].get("min", min_period)
-            max_period = config["period"].get("max", max_period)
+            # Ensure we have default values if configuration is incomplete
+            min_period = 2
+            max_period = 50
+            if "period" in config and isinstance(config["period"], dict):
+                min_period = config["period"].get("min", min_period)
+                max_period = config["period"].get("max", max_period)
+            else:
+                min_period = config.get("min_period", min_period)
+                max_period = config.get("max_period", max_period)
+            
+            gene_config = GeneConfig(
+                name=config.get("name", "RSI"),
+                min_value=float(min_period),
+                max_value=float(max_period),
+                step=float(config.get("step", 1)),
+                mutation_rate=config.get("mutation_rate", 0.1),
+                mutation_sigma=config.get("mutation_range", 0.2)
+            )
+        elif isinstance(config_loader_or_gene_config, GeneConfig):
+            gene_config = config_loader_or_gene_config
+            self._config_loader = ConfigLoader()  # Create default for crossover
         else:
-            min_period = config.get("min_period", min_period)
-            max_period = config.get("max_period", max_period)
-        
-        gene_config = GeneConfig(
-            name=config.get("name", "RSI"),
-            min_value=float(min_period),
-            max_value=float(max_period),
-            step=float(config.get("step", 1)),
-            mutation_rate=config.get("mutation_rate", 0.1),
-            mutation_sigma=config.get("mutation_range", 0.2)
-        )
+            config_loader = ConfigLoader()
+            self._config_loader = config_loader  # Store for crossover operations
+            config = config_loader.get_indicator_config("rsi")
+            
+            # Ensure we have default values if configuration is incomplete
+            min_period = 2
+            max_period = 50
+            if "period" in config and isinstance(config["period"], dict):
+                min_period = config["period"].get("min", min_period)
+                max_period = config["period"].get("max", max_period)
+            else:
+                min_period = config.get("min_period", min_period)
+                max_period = config.get("max_period", max_period)
+            
+            gene_config = GeneConfig(
+                name=config.get("name", "RSI"),
+                min_value=float(min_period),
+                max_value=float(max_period),
+                step=float(config.get("step", 1)),
+                mutation_rate=config.get("mutation_rate", 0.1),
+                mutation_sigma=config.get("mutation_range", 0.2)
+            )
         
         super().__init__(gene_config)
         

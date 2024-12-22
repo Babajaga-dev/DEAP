@@ -1,4 +1,4 @@
-from typing import Any, Tuple, Optional
+from typing import Any, Tuple, Optional, Union
 import random
 import pandas as pd
 import numpy as np
@@ -10,12 +10,12 @@ from ...utils.config_loader import ConfigLoader
 class ATRGene(BaseGene):
     """Gene class for Average True Range indicator using TA-Lib and DEAP"""
     
-    def __init__(self, config: Optional[GeneConfig] = None):
+    def __init__(self, config_loader_or_gene_config: Optional[Union[ConfigLoader, GeneConfig]] = None):
         """Initialize ATR gene with configuration"""
-        if config is None:
-            config_loader = ConfigLoader()
+        if isinstance(config_loader_or_gene_config, ConfigLoader):
+            config_loader = config_loader_or_gene_config
             indicator_config = config_loader.get_indicator_config("atr")
-            config = GeneConfig(
+            gene_config = GeneConfig(
                 name=indicator_config["name"],
                 min_value=float(indicator_config["min_period"]),
                 max_value=float(indicator_config["max_period"]),
@@ -23,7 +23,20 @@ class ATRGene(BaseGene):
                 mutation_rate=float(indicator_config["mutation_rate"]),
                 mutation_sigma=float(indicator_config["mutation_range"])
             )
-        super().__init__(config)
+        elif isinstance(config_loader_or_gene_config, GeneConfig):
+            gene_config = config_loader_or_gene_config
+        else:
+            config_loader = ConfigLoader()
+            indicator_config = config_loader.get_indicator_config("atr")
+            gene_config = GeneConfig(
+                name=indicator_config["name"],
+                min_value=float(indicator_config["min_period"]),
+                max_value=float(indicator_config["max_period"]),
+                step=float(indicator_config["step"]),
+                mutation_rate=float(indicator_config["mutation_rate"]),
+                mutation_sigma=float(indicator_config["mutation_range"])
+            )
+        super().__init__(gene_config)
         self._cache = {}
 
     def _register_gene(self):

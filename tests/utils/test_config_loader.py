@@ -1,93 +1,67 @@
 import pytest
 import os
 import yaml
+from pathlib import Path
 from src.utils.config_loader import ConfigLoader
 
 @pytest.fixture
-def config_loader():
-    """Fixture that provides a ConfigLoader instance"""
-    return ConfigLoader()
-
-@pytest.fixture
-def mock_config_data():
-    """Fixture that provides test configuration data"""
-    return {
-        "indicators": {
-            "sma": {
-                "name": "Simple Moving Average",
-                "period": {
-                    "min": 2,
-                    "max": 200,
-                    "default": 20
-                },
-                "mutation_rate": {
-                    "min": 0.0,
-                    "max": 1.0,
-                    "default": 0.1
-                },
-                "mutation_range": {
-                    "min": 0.0,
-                    "max": 1.0,
-                    "default": 0.2
-                }
-            },
-            "rsi": {
-                "name": "Relative Strength Index",
-                "period": {
-                    "min": 2,
-                    "max": 50,
-                    "default": 14
-                },
-                "overbought": {
-                    "min": 50,
-                    "max": 100,
-                    "default": 70
-                },
-                "oversold": {
-                    "min": 0,
-                    "max": 50,
-                    "default": 30
+def mock_config_dir(tmp_path):
+    """Create a temporary config directory with all required files"""
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    
+    # Create mock configs
+    configs = {
+        "indicators.yaml": {
+            "indicators": {
+                "rsi": {
+                    "name": "Relative Strength Index",
+                    "period": {
+                        "min": 2,
+                        "max": 50,
+                        "default": 14
+                    }
                 }
             }
         },
-        "general": {
+        "genetic.yaml": {
             "optimization": {
                 "population_size": 50,
-                "generations": 100,
-                "crossover_probability": 0.7,
-                "mutation_probability": 0.2
-            },
-            "risk_management": {
-                "max_position_size": 0.1,
-                "max_risk_per_trade": 0.02,
-                "stop_loss_atr_multiplier": 2.0
+                "generations": 100
+            }
+        },
+        "strategies.yaml": {
+            "strategies": {
+                "general": {
+                    "risk_free_rate": 0.02,
+                    "transaction_costs": 0.001
+                },
+                "trend_momentum": {
+                    "name": "Trend Momentum Strategy",
+                    "indicators": ["rsi", "macd"]
+                }
+            }
+        },
+        "backtest.yaml": {
+            "backtest": {
+                "initial_capital": 100000,
+                "currency": "USD"
             }
         }
     }
+    
+    for file_name, content in configs.items():
+        file_path = config_dir / file_name
+        with open(file_path, 'w') as f:
+            yaml.dump(content, f)
+    
+    return config_dir
 
 @pytest.fixture
-def mock_config_file(tmp_path, mock_config_data):
-    """Fixture that creates a temporary config file with test data"""
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    config_file = config_dir / "indicators.yaml"
-    
-    with open(config_file, 'w') as f:
-        yaml.dump(mock_config_data, f)
-    
-    return config_file
-
-@pytest.fixture
-def invalid_yaml_file(tmp_path):
-    """Fixture that creates an invalid YAML file"""
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    config_file = config_dir / "invalid.yaml"
-    
-    with open(config_file, 'w') as f:
-        f.write("invalid: yaml: {unclosed: bracket")
-    
-    return config_file
+def config_loader(mock_config_dir, monkeypatch):
+    """Create ConfigLoader instance with mocked config directory"""
+    monkeypatch.setenv('CONFIG_DIR', str(mock_config_dir))
+    return ConfigLoader()
 
 class TestConfigLoader:
     def test_initialization(self, config_loader):
@@ -95,173 +69,135 @@ class TestConfigLoader:
         assert config_loader is not None
         assert hasattr(config_loader, 'config_dir')
         assert hasattr(config_loader, 'logger')
-        assert isinstance(config_loader._cached_configs, dict)
-
-    def test_load_config(self, config_loader, mock_config_file, monkeypatch):
-        """Test loading configuration file"""
-        monkeypatch.setattr(config_loader, 'config_dir', str(mock_config_file.parent))
-        config = config_loader.load_config("indicators")
-        
-        assert config is not None
-        assert "indicators" in config
-        assert "general" in config
-        assert "sma" in config["indicators"]
-        assert "rsi" in config["indicators"]
-
-    def test_load_nonexistent_config(self, config_loader):
-        """Test loading non-existent configuration file"""
-        with pytest.raises(FileNotFoundError) as exc_info:
-            config_loader.load_config("nonexistent")
-        assert "not found" in str(exc_info.value)
-
-    def test_load_invalid_yaml(self, config_loader, invalid_yaml_file, monkeypatch):
-        """Test loading invalid YAML file"""
-        monkeypatch.setattr(config_loader, 'config_dir', str(invalid_yaml_file.parent))
-        with pytest.raises(ValueError) as exc_info:
-            config_loader.load_config("invalid")
-        assert "Error parsing configuration file" in str(exc_info.value)
-
-    def test_get_indicator_config(self, config_loader, mock_config_file, monkeypatch):
-        """Test getting specific indicator configuration"""
-        monkeypatch.setattr(config_loader, 'config_dir', str(mock_config_file.parent))
-        sma_config = config_loader.get_indicator_config("sma")
-        
-        assert sma_config is not None
-        assert sma_config["name"] == "Simple Moving Average"
-        assert sma_config["period"]["min"] == 2
-        assert sma_config["period"]["max"] == 200
-        assert sma_config["period"]["default"] == 20
-
-    def test_get_nonexistent_indicator(self, config_loader, mock_config_file, monkeypatch):
-        """Test getting non-existent indicator configuration"""
-        monkeypatch.setattr(config_loader, 'config_dir', str(mock_config_file.parent))
-        with pytest.raises(ValueError) as exc_info:
-            config_loader.get_indicator_config("nonexistent")
-        assert "not found" in str(exc_info.value)
-
-    def test_validate_indicator_params(self, config_loader, mock_config_file, monkeypatch):
+    
+    def test_load_all_configs(self, config_loader):
+        """Test loading all configuration files"""
+        for config_name in ConfigLoader.CONFIG_FILES:
+            config_name = config_name.replace('.yaml', '')
+            config = config_loader.load_config(config_name)
+            assert config is not None
+    
+    def test_get_indicator_config(self, config_loader):
+        """Test getting indicator configuration"""
+        rsi_config = config_loader.get_indicator_config("rsi")
+        assert rsi_config is not None
+        assert rsi_config["name"] == "Relative Strength Index"
+        assert rsi_config["period"]["default"] == 14
+    
+    def test_get_strategy_config(self, config_loader):
+        """Test getting strategy configuration"""
+        strategy_config = config_loader.get_strategy_config("trend_momentum")
+        assert strategy_config is not None
+        assert strategy_config["name"] == "Trend Momentum Strategy"
+        assert "rsi" in strategy_config["indicators"]
+    
+    def test_get_genetic_config(self, config_loader):
+        """Test getting genetic optimization configuration"""
+        genetic_config = config_loader.get_genetic_config()
+        assert genetic_config is not None
+        assert genetic_config["population_size"] == 50
+        assert genetic_config["generations"] == 100
+    
+    def test_get_backtest_config(self, config_loader):
+        """Test getting backtest configuration"""
+        backtest_config = config_loader.get_backtest_config()
+        assert backtest_config is not None
+        assert backtest_config["initial_capital"] == 100000
+        assert backtest_config["currency"] == "USD"
+    
+    def test_get_risk_params(self, config_loader):
+        """Test getting risk parameters"""
+        risk_params = config_loader.get_risk_params()
+        assert risk_params is not None
+        assert risk_params["risk_free_rate"] == 0.02
+        assert risk_params["transaction_costs"] == 0.001
+    
+    def test_validate_indicator_params(self, config_loader):
         """Test parameter validation for indicators"""
-        monkeypatch.setattr(config_loader, 'config_dir', str(mock_config_file.parent))
-        
         # Test valid parameters
-        valid_params = {"period": 20, "mutation_rate": 0.1}
-        assert config_loader.validate_indicator_params("sma", valid_params)
-        
-        # Test parameter below minimum
-        with pytest.raises(ValueError) as exc_info:
-            config_loader.validate_indicator_params("sma", {"period": 1})
-        assert "below minimum" in str(exc_info.value)
-        
-        # Test parameter above maximum
-        with pytest.raises(ValueError) as exc_info:
-            config_loader.validate_indicator_params("sma", {"period": 201})
-        assert "exceeds maximum" in str(exc_info.value)
-        
-        # Test unknown parameter
-        with pytest.raises(ValueError) as exc_info:
-            config_loader.validate_indicator_params("sma", {"unknown": 10})
-        assert "Unknown parameter" in str(exc_info.value)
-
-    def test_validate_rsi_params(self, config_loader, mock_config_file, monkeypatch):
-        """Test parameter validation for RSI indicator"""
-        monkeypatch.setattr(config_loader, 'config_dir', str(mock_config_file.parent))
-        
-        # Test valid parameters
-        valid_params = {
-            "period": 14,
-            "overbought": 70,
-            "oversold": 30
-        }
+        valid_params = {"period": {"default": 10}}
         assert config_loader.validate_indicator_params("rsi", valid_params)
         
-        # Test invalid overbought level
-        with pytest.raises(ValueError) as exc_info:
-            config_loader.validate_indicator_params("rsi", {"overbought": 101})
-        assert "exceeds maximum" in str(exc_info.value)
+        # Test parameters out of range
+        invalid_params = {"period": {"default": 1}}
+        with pytest.raises(ValueError):
+            config_loader.validate_indicator_params("rsi", invalid_params)
         
-        # Test invalid oversold level
-        with pytest.raises(ValueError) as exc_info:
-            config_loader.validate_indicator_params("rsi", {"oversold": -1})
-        assert "below minimum" in str(exc_info.value)
-
-    def test_get_optimization_params(self, config_loader, mock_config_file, monkeypatch):
-        """Test getting optimization parameters"""
-        monkeypatch.setattr(config_loader, 'config_dir', str(mock_config_file.parent))
-        opt_params = config_loader.get_optimization_params()
-        
-        assert opt_params is not None
-        assert opt_params["population_size"] == 50
-        assert opt_params["generations"] == 100
-        assert opt_params["crossover_probability"] == 0.7
-        assert opt_params["mutation_probability"] == 0.2
-
-    def test_get_risk_params(self, config_loader, mock_config_file, monkeypatch):
-        """Test getting risk management parameters"""
-        monkeypatch.setattr(config_loader, 'config_dir', str(mock_config_file.parent))
-        risk_params = config_loader.get_risk_params()
-        
-        assert risk_params is not None
-        assert risk_params["max_position_size"] == 0.1
-        assert risk_params["max_risk_per_trade"] == 0.02
-        assert risk_params["stop_loss_atr_multiplier"] == 2.0
-
-    def test_update_config_value(self, config_loader, mock_config_file, monkeypatch):
+        # Test unknown parameter
+        unknown_params = {"unknown": 10}
+        with pytest.raises(ValueError):
+            config_loader.validate_indicator_params("rsi", unknown_params)
+    
+    def test_get_all_strategies(self, config_loader):
+        """Test getting list of all strategies"""
+        strategies = config_loader.get_all_strategies()
+        assert isinstance(strategies, list)
+        assert "general" in strategies
+        assert "trend_momentum" in strategies
+    
+    def test_get_all_indicators(self, config_loader):
+        """Test getting list of all indicators"""
+        indicators = config_loader.get_all_indicators()
+        assert isinstance(indicators, list)
+        assert "rsi" in indicators
+    
+    def test_update_config_value(self, config_loader):
         """Test updating configuration values"""
-        monkeypatch.setattr(config_loader, 'config_dir', str(mock_config_file.parent))
-        
         # Test temporary update
         config_loader.update_config_value(
             "indicators",
-            "indicators.sma.period.default",
-            30,
+            "indicators.rsi.period.default",
+            20,
             temporary=True
         )
         
-        updated_config = config_loader.get_indicator_config("sma")
-        assert updated_config["period"]["default"] == 30
+        updated_config = config_loader.get_indicator_config("rsi")
+        assert updated_config["period"]["default"] == 20
         
-        # Verify file wasn't modified
-        with open(mock_config_file, 'r') as f:
-            file_config = yaml.safe_load(f)
-        assert file_config["indicators"]["sma"]["period"]["default"] == 20
-        
-        # Test persistent update
+        # Test permanent update
         config_loader.update_config_value(
             "indicators",
-            "indicators.sma.period.default",
-            40,
+            "indicators.rsi.period.default",
+            25,
             temporary=False
         )
         
-        # Verify file was modified
-        with open(mock_config_file, 'r') as f:
-            file_config = yaml.safe_load(f)
-        assert file_config["indicators"]["sma"]["period"]["default"] == 40
-
-    def test_cache_functionality(self, config_loader, mock_config_file, monkeypatch):
+        # Reload config to verify persistence
+        config_loader.clear_cache()
+        reloaded_config = config_loader.get_indicator_config("rsi")
+        assert reloaded_config["period"]["default"] == 25
+    
+    def test_cache_functionality(self, config_loader):
         """Test configuration caching"""
-        monkeypatch.setattr(config_loader, 'config_dir', str(mock_config_file.parent))
-        
         # First load
         config1 = config_loader.load_config("indicators")
         
         # Second load should return cached version
         config2 = config_loader.load_config("indicators")
-        
-        assert config1 is config2  # Same object due to caching
+        assert config1 is config2
         
         # Clear cache
         config_loader.clear_cache()
         config3 = config_loader.load_config("indicators")
+        assert config1 is not config3
+    
+    def test_missing_config_file(self, mock_config_dir, monkeypatch):
+        """Test handling of missing configuration files"""
+        # Set the config directory before creating ConfigLoader
+        monkeypatch.setenv('CONFIG_DIR', str(mock_config_dir))
         
-        assert config1 is not config3  # Different object after cache clear
-
-    def test_nested_config_update(self, config_loader, mock_config_file, monkeypatch):
-        """Test updating deeply nested configuration values"""
-        monkeypatch.setattr(config_loader, 'config_dir', str(mock_config_file.parent))
+        # Remove a config file
+        os.remove(mock_config_dir / "indicators.yaml")
         
-        path = "general.optimization.population_size"
-        config_loader.update_config_value("indicators", path, 100, temporary=True)
+        # Create a new ConfigLoader - should raise FileNotFoundError
+        with pytest.raises(FileNotFoundError):
+            ConfigLoader()
+    
+    def test_invalid_yaml(self, config_loader, mock_config_dir):
+        """Test handling of invalid YAML files"""
+        # Create invalid YAML
+        with open(mock_config_dir / "indicators.yaml", 'w') as f:
+            f.write("invalid: yaml: {unclosed")
         
-        opt_params = config_loader.get_optimization_params()
-        assert opt_params["population_size"] == 100
+        with pytest.raises(ValueError):
+            config_loader.load_config("indicators")

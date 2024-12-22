@@ -23,19 +23,7 @@ class SMAGene(BaseGene):
             )
         super().__init__(gene_config)
         
-        # Override mutation operator for integer values
-        # Scale mutation sigma based on the value range
-        value_range = self.config.max_value - self.config.min_value
-        scaled_sigma = value_range * self.config.mutation_sigma
-        
-        def mutate_int(individual):
-            # Apply Gaussian mutation
-            individual, = tools.mutGaussian(individual, mu=0, sigma=scaled_sigma, indpb=self.config.mutation_rate)
-            # Round to integer and validate
-            individual[0] = self.validate_and_clip_value(individual[0])
-            return individual,
-            
-        self.toolbox.register("mutate", mutate_int)
+        # No need to override mutation operator as BaseGene now handles guaranteed mutation
         
         # Initialize with random value and ensure it's an integer
         individual = self.toolbox.individual()

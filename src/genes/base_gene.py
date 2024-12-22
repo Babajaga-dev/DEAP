@@ -67,9 +67,18 @@ class BaseGene(ABC):
         
         # Register genetic operators
         self.toolbox.register("mate", tools.cxBlend, alpha=0.5)
-        self.toolbox.register("mutate", tools.mutGaussian, 
-                            mu=0, sigma=self.config.mutation_sigma, 
-                            indpb=self.config.mutation_rate)
+        
+        # Custom mutation operator that guarantees mutation
+        def guaranteed_mutation(individual):
+            # Scale mutation sigma based on value range
+            value_range = self.config.max_value - self.config.min_value
+            scaled_sigma = value_range * self.config.mutation_sigma
+            
+            # Always apply mutation with scaled sigma
+            individual[0] += random.gauss(0, scaled_sigma)
+            return individual,
+            
+        self.toolbox.register("mutate", guaranteed_mutation)
         self.toolbox.register("select", tools.selTournament, tournsize=3)
         self.toolbox.register("evaluate", self._evaluate_individual)
     

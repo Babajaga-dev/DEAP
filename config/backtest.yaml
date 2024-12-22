@@ -1,0 +1,82 @@
+backtest:
+  # Parametri generali
+  general:
+    initial_capital: 100000
+    currency: "USD"
+    leverage_allowed: true
+    max_leverage: 2.0
+    margin_requirement: 0.5
+
+  # Parametri temporali
+  time:
+    timeframe: "1h"  # options: 1m, 5m, 15m, 1h, 4h, 1d
+    warmup_period: 100  # periodi necessari per inizializzare indicatori
+    market_hours:
+      start: "09:30"
+      end: "16:00"
+    time_zone: "UTC"
+
+  # Gestione esecuzione
+  execution:
+    slippage_model: "fixed"  # options: fixed, normal_distribution, volume_adjusted
+    price_impact: 0.0001
+    latency: 100  # millisecondi
+    fill_probability: 0.98
+    partial_fills: true
+    min_fill_ratio: 0.8
+
+  # Commissioni e costi
+  costs:
+    commission:
+      type: "percentage"  # options: percentage, fixed
+      value: 0.001
+    spread:
+      type: "dynamic"  # options: fixed, dynamic
+      value: 0.0001
+      multiplier: 1.5  # per spread dinamico
+    borrowing_cost: 0.02  # per posizioni short
+    option_commission: 0.65  # per contratto
+
+  # Gestione dati
+  data:
+    price_type: "mid"  # options: mid, last, bid, ask
+    volume_filter: 1000000
+    gap_filling: "forward_fill"  # options: forward_fill, interpolate, ignore
+    adjust_splits: true
+    adjust_dividends: true
+
+  # Metriche e reporting
+  metrics:
+    basic:
+      - "total_return"
+      - "annual_return"
+      - "sharpe_ratio"
+      - "max_drawdown"
+      - "win_rate"
+    advanced:
+      - "sortino_ratio"
+      - "calmar_ratio"
+      - "omega_ratio"
+      - "information_ratio"
+    trade_specific:
+      - "avg_trade_duration"
+      - "profit_factor"
+      - "avg_win_loss_ratio"
+    risk:
+      - "var_95"
+      - "cvar_95"
+      - "beta"
+      - "alpha"
+
+  # Visualizzazione
+  visualization:
+    equity_curve: true
+    drawdown_plot: true
+    monthly_returns: true
+    rolling_metrics:
+      window: 252
+      metrics: ["sharpe", "volatility", "beta"]
+    trade_analysis:
+      plot_trades: true
+      plot_position_size: true
+      plot_exposure: true

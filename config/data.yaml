@@ -1,0 +1,59 @@
+data:
+  # Configurazione dati di mercato
+  market:
+    timeframe: "1h"
+    required_columns:
+      - timestamp
+      - open
+      - high
+      - low
+      - close
+      - volume
+    price_decimals: 8
+    volume_decimals: 2
+
+  # Gestione dati mancanti
+  preprocessing:
+    handle_missing:
+      method: "forward_fill"  # options: forward_fill, backfill, interpolate, drop
+      max_consecutive_missing: 5
+    handle_outliers:
+      method: "zscore"  # options: zscore, iqr, none
+      threshold: 3.0
+    volume_filter:
+      min_volume: 1000000
+      min_trades: 100
+
+  # Validazione dati
+  validation:
+    price_checks:
+      high_low: true  # high >= low
+      open_close_range: true  # open/close between high/low
+      zero_prices: false  # no zero prices allowed
+    volume_checks:
+      min_volume: 0  # minimum volume allowed
+      max_volume: null  # maximum volume allowed (null = no limit)
+    timestamp_checks:
+      gaps: "warn"  # options: warn, error, ignore
+      duplicates: "error"  # options: warn, error, ignore
+      timezone: "UTC"
+
+  # Divisione train/test
+  split:
+    train_ratio: 0.8
+    validation_ratio: 0.1  # from remaining data
+    shuffle: false
+    stratify: false
+
+  # Cache
+  cache:
+    enabled: true
+    max_size: 1000  # number of datasets
+    directory: "cache"
+    expiry: 86400  # seconds (24h)
+
+  # Salvataggio
+  save:
+    format: "parquet"  # options: csv, parquet, pickle
+    compression: "snappy"  # for parquet
+    directory: "data"
