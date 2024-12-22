@@ -143,6 +143,12 @@ class BaseGene(ABC):
             "type": self.__class__.__name__
         }
     
+    def from_dict(self, data: Dict[str, Any]) -> None:
+        """Initialize the gene from a dictionary representation"""
+        if data["type"] != self.__class__.__name__:
+            raise ValueError(f"Invalid gene type: {data['type']}")
+        self.value = data["value"]
+
     @abstractmethod
     def compute(self, data: Any) -> Any:
         """

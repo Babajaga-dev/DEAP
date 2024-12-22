@@ -1,5 +1,7 @@
 import click
 import pandas as pd
+import numpy as np
+from numpy import float32, float64
 from pathlib import Path
 from typing import Dict, Any
 import yaml
@@ -104,10 +106,20 @@ def optimize(strategy: str, data_path: str, output_dir: str):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         results_file = output_path / f"{strategy}_results_{timestamp}.yaml"
         
+        # Converti i valori numpy in float Python standard
+        def convert_numpy_values(obj):
+            if isinstance(obj, dict):
+                return {key: convert_numpy_values(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_numpy_values(item) for item in obj]
+            elif isinstance(obj, (np.float32, np.float64)):
+                return float(obj)
+            return obj
+
         results = {
             'strategy_type': strategy,
             'best_strategy': best_strategy.to_dict(),
-            'optimization_log': [record for record in logbook]
+            'optimization_log': convert_numpy_values(logbook)
         }
         
         with open(results_file, 'w') as f:

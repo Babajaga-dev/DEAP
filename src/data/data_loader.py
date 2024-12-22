@@ -251,22 +251,43 @@ class DataLoader:
             test_data = data.iloc[train_idx:]
             return train_data, test_data
             
-    def save_data(self, data: pd.DataFrame, filename: str) -> None:
-        """Save data according to configuration"""
-        save_config = self.config["save"]
-        save_dir = Path(save_config["directory"])
-        save_dir.mkdir(exist_ok=True)
-        
-        filepath = save_dir / filename
-        format = save_config["format"]
-        
-        if format == "parquet":
-            data.to_parquet(filepath, compression=save_config["compression"])
-        elif format == "csv":
-            data.to_csv(filepath)
-        elif format == "pickle":
-            data.to_pickle(filepath)
-        else:
-            raise ValueError(f"Unsupported format: {format}")
+    def load_parquet(self, file_path: Union[str, Path]) -> pd.DataFrame:
+        """Load data from parquet file"""
+        try:
+            data = pd.read_parquet(file_path)
             
-        self.logger.info(f"Data saved to {filepath}")
+            # Validate columns
+            required_columns = self.config["market"]["required_columns"]
+            if not all(col in data.columns for col in required_columns):
+                raise ValueError(f"Parquet must contain columns: {required_columns}")
+            
+            # Ensure timestamp is index
+            if 'timestamp' in data.columns:
+                data.set_index('timestamp', inplace=True)
+            
+            self._data = data
+            return data
+            
+        except Exception as e:
+            self.logger.error(f"Error loading parquet file: {e}")
+            raise
+            
+    def save_data(self, data: pd.DataFrame, path: str) -> None:
+        """Save data to file"""
+        path = Path(path)
+        
+        # Assicurati che l'indice timestamp sia una colonna
+        data_to_save = data.copy()
+        if isinstance(data_to_save.index, pd.DatetimeIndex):
+            data_to_save = data_to_save.reset_index()
+        
+        if path.suffix == '.parquet':
+            data_to_save.to_parquet(path, index=False)
+        elif path.suffix == '.csv':
+            data_to_save.to_csv(path, index=False)
+        elif path.suffix == '.pickle':
+            data_to_save.to_pickle(path)
+        else:
+            raise ValueError(f"Unsupported file format: {path.suffix}")
+            
+        self.logger.info(f"Data saved to {path}")

@@ -11,7 +11,7 @@ strategies:
     max_correlation: 0.7
 
   # Configurazione TrendMomentumStrategy
-  trend_momentum:
+  trendmomentum:
     name: "Trend Momentum Strategy"
     indicators: ["rsi", "macd", "bollinger"]
     position_sizing:
@@ -61,3 +61,21 @@ strategies:
       max_days_to_expiry: 60
       preferred_delta: 0.3
       iv_rank_min: 0.5
+
+  # Configurazione MockStrategy per i test
+  mock:
+    name: "Mock Strategy"
+    indicators: ["rsi", "bollinger", "atr"]
+    position_sizing:
+      method: "fixed"
+      base_size: 1.0
+    entry_conditions:
+      rsi_threshold: 50
+      bollinger_threshold: 2.0
+      atr_threshold: 0.01
+    exit_conditions:
+      profit_target: 0.05
+      stop_loss: 0.02
+    risk_management:
+      max_positions: 5
+      max_correlation: 0.7

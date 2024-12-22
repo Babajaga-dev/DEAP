@@ -40,7 +40,7 @@ class GeneticOptimizer:
         
         self.strategy_class = strategy_class
         self.config_loader = config_loader
-        self.data_loader = DataLoader()
+        self.data_loader = DataLoader(config_loader)
         self.population_size = population_size
         self.generations = generations
         self.tournament_size = tournament_size
@@ -59,12 +59,24 @@ class GeneticOptimizer:
                  end_date: Optional[str] = None,
                  train_ratio: float = 0.8) -> None:
         """Load and prepare data for optimization"""
-        self.data_loader.load_csv(file_path)
-        
-        if start_date or end_date:
-            self.data_loader._data = self.data_loader.get_timeframe_data(start_date, end_date)
+        file_path = Path(file_path)
+        try:
+            # Load data based on file extension
+            if file_path.suffix == '.parquet':
+                self.data_loader.load_parquet(file_path)
+            else:
+                self.data_loader.load_csv(file_path)
             
-        self.train_data, self.test_data = self.data_loader.get_train_test_split(train_ratio=train_ratio)
+            # Apply timeframe filter if specified
+            if start_date or end_date:
+                filtered_data = self.data_loader.get_timeframe_data(start_date, end_date)
+                self.data_loader._data = filtered_data  # Update data in loader after filtering
+                
+            # Get train/test split
+            self.train_data, self.test_data = self.data_loader.get_train_test_split(train_ratio=train_ratio)
+            
+        except Exception as e:
+            raise ValueError(f"Error loading data: {str(e)}")
 
     def _setup_deap(self):
         """Setup DEAP framework"""
@@ -83,43 +95,9 @@ class GeneticOptimizer:
         """Create a new strategy instance"""
         strategy_type = self.strategy_class.__name__.lower()
         
-        if strategy_type == 'mockstrategy':
-            # Per MockStrategy usata nei test, usa configurazione di base
-            strategy_params = {
-                'name': 'MockStrategy',
-                'risk_free_rate': 0.02,
-                'transaction_costs': 0.001,
-                'position_sizing': {'method': 'fixed', 'base_size': 1.0},
-                'indicators': ['sma', 'rsi'],
-                'entry_conditions': {},
-                'exit_conditions': {},
-                'risk_management': {},
-                'option_preferences': {}
-            }
-        else:
-            # Per strategie reali, usa la configurazione dal file
-            strategies_config = self.config_loader.load_config("strategies")
-            strategy_type = strategy_type.replace('strategy', '')
-            
-            if "strategies" not in strategies_config or strategy_type not in strategies_config["strategies"]:
-                raise ValueError(f"Strategy type {strategy_type} not found in configuration")
-                
-            strategy_config = strategies_config["strategies"][strategy_type]
-            general_config = strategies_config["strategies"].get('general', {})
-            
-            strategy_params = {
-                'name': strategy_config.get('name', 'MockStrategy'),
-                'risk_free_rate': general_config.get('risk_free_rate', 0.02),
-                'transaction_costs': general_config.get('transaction_costs', 0.001),
-                'position_sizing': strategy_config.get('position_sizing', {'method': 'fixed', 'base_size': 1.0}),
-                'indicators': strategy_config.get('indicators', ['sma', 'rsi']),
-                'entry_conditions': strategy_config.get('entry_conditions', {}),
-                'exit_conditions': strategy_config.get('exit_conditions', {}),
-                'risk_management': strategy_config.get('risk_management', {}),
-                'option_preferences': strategy_config.get('option_preferences', {})
-            }
-        config = StrategyConfig(**strategy_params)
-        strategy = self.strategy_class(config)
+        # Per strategie reali, usa la configurazione dal file
+        strategy_type = self.strategy_class.__name__.lower().replace('strategy', '')
+        strategy = self.strategy_class(self.config_loader)
         return StrategyWrapper(strategy)
     
     def _evaluate_strategy(self, wrapper: 'StrategyWrapper') -> Tuple[float]:
@@ -140,7 +118,8 @@ class GeneticOptimizer:
         dd_penalty = abs(metrics['max_drawdown'])
         ret_bonus = max(0, metrics['annual_return'])  # Bonus for positive returns
         
-        fitness = sharpe + ret_bonus - dd_penalty
+        # Assicurati che il fitness sia un float e non un numpy.float
+        fitness = float(sharpe + ret_bonus - dd_penalty)
         return (fitness,)
     
     def _crossover(self, wrapper1: 'StrategyWrapper', wrapper2: 'StrategyWrapper') -> Tuple['StrategyWrapper', 'StrategyWrapper']:
@@ -180,14 +159,30 @@ class GeneticOptimizer:
         stats.register("min", np.min)
         stats.register("max", np.max)
         
-        logbook = tools.Logbook()
+        logbook = []
         
         # Evaluate initial population
-        fitnesses = [self.toolbox.evaluate(ind) for ind in pop]
-        for ind, fit in zip(pop, fitnesses):
+        for ind in pop:
+            fit = self.toolbox.evaluate(ind)
+            if not isinstance(fit[0], float):
+                fit = (float(fit[0]),)
             ind.fitness.values = fit
+            
+        # Record initial statistics
+        record = stats.compile(pop)
+        stats_dict = {
+            'generation': 0,
+            'avg': float(record['avg']) if isinstance(record['avg'], (np.float32, np.float64)) else record['avg'],
+            'std': float(record['std']) if isinstance(record['std'], (np.float32, np.float64)) else record['std'],
+            'min': float(record['min']) if isinstance(record['min'], (np.float32, np.float64)) else record['min'],
+            'max': float(record['max']) if isinstance(record['max'], (np.float32, np.float64)) else record['max']
+        }
+        logbook.append(stats_dict)
+        if callback:
+            callback(0, stats_dict)
         
-        for gen in range(self.generations):
+        # Evolution
+        for gen in range(1, self.generations + 1):
             # Select next generation
             offspring = self.toolbox.select(pop, len(pop))
             offspring = list(map(self.toolbox.clone, offspring))
@@ -207,8 +202,10 @@ class GeneticOptimizer:
             
             # Evaluate invalid individuals
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = [self.toolbox.evaluate(ind) for ind in invalid_ind]
-            for ind, fit in zip(invalid_ind, fitnesses):
+            for ind in invalid_ind:
+                fit = self.toolbox.evaluate(ind)
+                if not isinstance(fit[0], float):
+                    fit = (float(fit[0]),)
                 ind.fitness.values = fit
             
             # Replace population
@@ -216,10 +213,17 @@ class GeneticOptimizer:
             
             # Record statistics
             record = stats.compile(pop)
-            logbook.record(gen=gen, **record)
+            stats_dict = {
+                'generation': gen,
+                'avg': float(record['avg']) if isinstance(record['avg'], (np.float32, np.float64)) else record['avg'],
+                'std': float(record['std']) if isinstance(record['std'], (np.float32, np.float64)) else record['std'],
+                'min': float(record['min']) if isinstance(record['min'], (np.float32, np.float64)) else record['min'],
+                'max': float(record['max']) if isinstance(record['max'], (np.float32, np.float64)) else record['max']
+            }
+            logbook.append(stats_dict)
             
             if callback:
-                callback(gen, record)
+                callback(gen, stats_dict)
         
         best_ind = tools.selBest(pop, 1)[0]
         return best_ind.unwrap, logbook

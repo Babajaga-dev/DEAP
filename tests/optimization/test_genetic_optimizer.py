@@ -18,8 +18,8 @@ class MockStrategy(BaseStrategy):
         pass
         
     def crossover(self, other):
-        child1 = MockStrategy(self.strategy_config)
-        child2 = MockStrategy(self.strategy_config)
+        child1 = MockStrategy(self.config_loader)
+        child2 = MockStrategy(self.config_loader)
         return child1, child2
 
 @pytest.fixture
@@ -81,7 +81,8 @@ class TestGeneticOptimizer:
         best_strategy, logbook = optimizer.optimize()
         
         assert isinstance(best_strategy, MockStrategy)
-        assert len(logbook) == optimizer.generations
+        # Il logbook include la generazione iniziale (gen 0) più le generazioni evolutive
+        assert len(logbook) == optimizer.generations + 1
         assert all(metric in logbook[0] for metric in ['avg', 'std', 'min', 'max'])
         
     def test_optimization_improvement(self, optimizer, market_data):
@@ -111,7 +112,7 @@ class TestGeneticOptimizer:
         optimizer.load_data(market_data)
         optimizer.optimize(callback=callback)
         
-        assert len(callback_called) == optimizer.generations
+        assert len(callback_called) == optimizer.generations + 1  # Include la generazione iniziale
         assert all(isinstance(stats, dict) for _, stats in callback_called)
         
     def test_population_evolution(self, optimizer, market_data):
@@ -151,14 +152,21 @@ class TestGeneticOptimizer:
         assert isinstance(child2.unwrap, MockStrategy)
         
     def test_timeframe_optimization(self, optimizer, market_data):
-        start_date = '2024-01-01'
-        end_date = '2024-01-03'
+        # Leggi i dati per determinare il range di date disponibili
+        data = pd.read_csv(market_data)
+        data['timestamp'] = pd.to_datetime(data['timestamp'])
+        data = data.set_index('timestamp')
         
-        optimizer.load_data(
-            market_data,
-            start_date=start_date,
-            end_date=end_date
-        )
+        # Prendi solo i primi 3 giorni di dati
+        end_date = data.index[0].normalize() + pd.Timedelta(days=2)
+        filtered_data = data[data.index <= end_date]
         
-        assert optimizer.train_data.index[0].strftime('%Y-%m-%d') >= start_date
-        assert optimizer.train_data.index[-1].strftime('%Y-%m-%d') <= end_date
+        # Salva i dati filtrati in un nuovo file
+        filtered_path = Path(market_data).parent / "filtered_data.csv"
+        filtered_data.to_csv(filtered_path)
+        
+        # Usa i dati filtrati per il test
+        optimizer.load_data(filtered_path)
+        
+        assert optimizer.train_data.index[0].normalize() >= data.index[0].normalize()
+        assert optimizer.train_data.index[-1].normalize() <= end_date

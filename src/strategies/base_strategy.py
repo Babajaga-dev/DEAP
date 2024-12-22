@@ -36,26 +36,19 @@ class BaseStrategy(ABC):
         """Get strategy genes"""
         return self._genes
         
-    def __init__(self, config: StrategyConfig, config_loader: ConfigLoader = None):
+    def __init__(self, config_loader: ConfigLoader = None):
         self.fitness = None  # Per DEAP
         """
         Initialize strategy with configuration
         
         Args:
-            config (StrategyConfig): Strategy configuration
             config_loader (ConfigLoader, optional): Configuration loader instance
         """
         if config_loader is None:
             config_loader = ConfigLoader()
             
         self.config_loader = config_loader
-        self.strategy_config = config
-        
-        # Load backtest parameters
-        self.backtest_config = self.config_loader.get_backtest_config()
-        
-        # Load risk parameters
-        self.risk_params = self.config_loader.get_risk_params()
+        self._load_configuration(self.__class__.__name__.lower().replace('strategy', ''))
         
         self._initialize_genes()
         
@@ -65,7 +58,8 @@ class BaseStrategy(ABC):
     def _load_configuration(self, name: str) -> None:
         """Load strategy configuration from config files"""
         # Load strategy specific configuration
-        config_dict = self.config_loader.get_strategy_config(name)
+        strategy_name = name.replace('_', '')  # Remove underscores for matching
+        config_dict = self.config_loader.get_strategy_config(strategy_name)
         risk_params = self.config_loader.get_risk_params()
         
         self.strategy_config = StrategyConfig(

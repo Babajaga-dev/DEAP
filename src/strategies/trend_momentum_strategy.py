@@ -15,32 +15,7 @@ class TrendMomentumStrategy(BaseStrategy):
             description=None,
             indicators=["rsi", "macd", "bollinger"]
         )
-        if config is None:
-            config = StrategyConfig(
-                name="Trend Momentum Strategy",
-                position_sizing={"method": "fixed", "base_size": 1.0},
-                indicators=["rsi", "macd", "bollinger"],
-                entry_conditions={
-                    "rsi_oversold": 30,
-                    "rsi_overbought": 70,
-                    "macd_threshold": 0,
-                    "bollinger_deviation": 2.0
-                },
-                exit_conditions={
-                    "profit_target": 0.05,
-                    "stop_loss": 0.02,
-                    "trailing_stop": 0.015
-                },
-                risk_management={
-                    "max_positions": 5,
-                    "max_correlation": 0.7
-                },
-                option_preferences={},
-                risk_free_rate=0.02,
-                transaction_costs=0.001,
-                position_size=1.0
-            )
-        super().__init__(config, config_loader)
+        super().__init__(config_loader)
 
     def _initialize_genes(self) -> None:
         """Initialize strategy genes from configuration"""
@@ -108,8 +83,8 @@ class TrendMomentumStrategy(BaseStrategy):
         if not isinstance(other, TrendMomentumStrategy):
             raise ValueError("Can only crossover with another TrendMomentumStrategy")
         
-        child1 = TrendMomentumStrategy(config=self.strategy_config, config_loader=self.config_loader)
-        child2 = TrendMomentumStrategy(config=self.strategy_config, config_loader=self.config_loader)
+        child1 = TrendMomentumStrategy(config_loader=self.config_loader)
+        child2 = TrendMomentumStrategy(config_loader=self.config_loader)
         
         for key in self._genes:
             c1_gene, c2_gene = self._genes[key].crossover(other._genes[key])

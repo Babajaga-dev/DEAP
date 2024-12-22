@@ -11,9 +11,7 @@ from ..genes.indicator_genes.atr_gene import ATRGene
 class OptionsStrategy(BaseStrategy):
     def __init__(self, config_loader: ConfigLoader = None):
         """Initialize OptionsStrategy with configuration"""
-        self.config_loader = config_loader if config_loader else ConfigLoader()
-        self._load_configuration("options")
-        super().__init__(self.strategy_config, self.config_loader)
+        super().__init__(config_loader)
 
     def _initialize_genes(self) -> None:
         """Initialize strategy genes from configuration"""
@@ -201,3 +199,21 @@ class OptionsStrategy(BaseStrategy):
         signals[time_decay < threshold] = 0
         
         return signals
+
+    def to_dict(self) -> Dict:
+        """Convert strategy state to dictionary"""
+        return {
+            'name': 'OptionsStrategy',
+            'genes': {name: gene.to_dict() for name, gene in self._genes.items()}
+        }
+
+    def from_dict(self, data: Dict) -> None:
+        """Initialize strategy from dictionary state"""
+        if data['name'] != 'OptionsStrategy':
+            raise ValueError(f"Invalid strategy type: {data['name']}")
+        
+        # Initialize genes from saved state
+        self._initialize_genes()
+        for name, gene_data in data['genes'].items():
+            if name in self._genes:
+                self._genes[name].from_dict(gene_data)

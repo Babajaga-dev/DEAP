@@ -70,12 +70,33 @@ def strategy(config, monkeypatch):
                 "basic": ["total_return", "annual_return", "sharpe_ratio", "max_drawdown"]
             }
         }
-    
+
     config_loader = ConfigLoader()
     monkeypatch.setattr(config_loader, "get_risk_params", mock_get_risk_params)
     monkeypatch.setattr(config_loader, "get_backtest_config", mock_get_backtest_config)
-    
-    return TrendMomentumStrategy(config=config, config_loader=config_loader)
+    monkeypatch.setattr(config_loader, "get_strategy_config", lambda x: {
+        "name": "Trend Momentum Strategy",
+        "position_sizing": {"method": "fixed", "base_size": 1.0},
+        "indicators": ["rsi", "macd", "bollinger"],
+        "entry_conditions": {
+            "rsi_oversold": 30,
+            "rsi_overbought": 70,
+            "macd_threshold": 0,
+            "bollinger_deviation": 2.0
+        },
+        "exit_conditions": {
+            "profit_target": 0.05,
+            "stop_loss": 0.02,
+            "trailing_stop": 0.015
+        },
+        "risk_management": {
+            "max_positions": 5,
+            "max_correlation": 0.7
+        },
+        "option_preferences": {}
+    })
+
+    return TrendMomentumStrategy(config_loader=config_loader)
 
 class TestTrendMomentumStrategy:
     def test_initialization(self, strategy):
