@@ -116,9 +116,13 @@ def optimize(strategy: str, data_path: str, output_dir: str):
                 return float(obj)
             return obj
 
+        # Converti la strategia in dizionario e aggiungi il fitness
+        strategy_dict = best_strategy.to_dict()
+        strategy_dict['fitness'] = best_strategy.fitness
+
         results = {
             'strategy_type': strategy,
-            'best_strategy': best_strategy.to_dict(),
+            'best_strategy': strategy_dict,
             'optimization_log': convert_numpy_values(logbook)
         }
         

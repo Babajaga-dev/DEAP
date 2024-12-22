@@ -36,14 +36,28 @@ class BaseStrategy(ABC):
         """Get strategy genes"""
         return self._genes
         
+    @property
+    def fitness(self):
+        """Get fitness value"""
+        return (self._fitness_value,) if self._fitness_value is not None else None
+        
+    @fitness.setter
+    def fitness(self, value):
+        """Set fitness value"""
+        if isinstance(value, tuple):
+            self._fitness_value = value[0]
+        else:
+            self._fitness_value = value
+
     def __init__(self, config_loader: ConfigLoader = None):
-        self.fitness = None  # Per DEAP
         """
         Initialize strategy with configuration
         
         Args:
             config_loader (ConfigLoader, optional): Configuration loader instance
         """
+        self._fitness_value = None  # Valore interno del fitness
+        
         if config_loader is None:
             config_loader = ConfigLoader()
             
@@ -215,9 +229,30 @@ class BaseStrategy(ABC):
                    self.strategy_config.position_sizing and 
                    self.strategy_config.indicators)
         
+    def from_dict(self, data: Dict) -> None:
+        """Load strategy from dictionary representation"""
+        # Carica il fitness se presente
+        if 'fitness' in data:
+            self._fitness_value = float(data['fitness'])
+            
+        # Carica i geni
+        if 'genes' in data:
+            for name, gene_data in data['genes'].items():
+                if name in self._genes:
+                    self._genes[name].from_dict(gene_data)
+                    
+        # Carica la configurazione
+        if 'config' in data:
+            config = data['config']
+            self.strategy_config.name = config.get('name', self.strategy_config.name)
+            self.strategy_config.version = config.get('version', self.strategy_config.version)
+            self.strategy_config.description = config.get('description', self.strategy_config.description)
+            self.strategy_config.position_sizing.update(config.get('position_sizing', {}))
+            self.strategy_config.indicators = config.get('indicators', self.strategy_config.indicators)
+
     def to_dict(self) -> Dict:
         """Convert strategy to dictionary representation"""
-        return {
+        result = {
             'name': self.metadata.name,
             'version': self.metadata.version,
             'description': self.metadata.description,
@@ -231,3 +266,9 @@ class BaseStrategy(ABC):
                 'indicators': self.strategy_config.indicators
             }
         }
+        
+        # Aggiungi il fitness solo se è stato impostato
+        if self._fitness_value is not None:
+            result['fitness'] = float(self._fitness_value)
+            
+        return result

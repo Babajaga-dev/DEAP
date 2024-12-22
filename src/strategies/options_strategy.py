@@ -87,8 +87,13 @@ class OptionsStrategy(BaseStrategy):
         buy_puts = (overbought | price_above_upper) & significant_move & (high_volatility | (atr > min_atr))
         buy_calls = (oversold | price_below_lower) & significant_move & (high_volatility | (atr > min_atr))
         
+        # Converti i segnali booleani in interi
+        signals = pd.Series(0, index=data.index)
         signals[buy_puts] = -1  # Buy puts (bearish)
         signals[buy_calls] = 1   # Buy calls (bullish)
+        
+        # Assicurati che i segnali siano una serie con indice
+        signals.index = data.index
         
         # Apply risk management rules
         signals = self._apply_risk_management(signals, data)
@@ -99,18 +104,26 @@ class OptionsStrategy(BaseStrategy):
         """Apply risk management rules from configuration"""
         risk_config = self.strategy_config.risk_management
         
+        # Crea una copia dei segnali per evitare modifiche indesiderate
+        signals = signals.copy()
+        
         # Maximum exposure limits
         max_positions = risk_config.get("max_positions")
         if max_positions:
-            rolling_positions = signals.rolling(window=max_positions).count()
+            rolling_positions = signals.abs().rolling(window=max_positions, min_periods=1).sum()
             signals[rolling_positions >= max_positions] = 0
         
         # Volatility filters - limita l'esposizione quando la volatilità è troppo alta
         max_vega_exposure = risk_config.get("max_vega_exposure")
         if max_vega_exposure:
             atr = self._genes["atr"].compute(data["high"], data["low"], data["close"])
-            extreme_vol = atr > atr.rolling(20).mean() * (1 + max_vega_exposure)  # Modifica la logica
-            signals[extreme_vol] = 0  # Annulla i segnali solo in caso di volatilità estrema
+            atr = atr.fillna(0)  # Gestisci i NaN nell'ATR
+            atr_ma = atr.rolling(window=20, min_periods=1).mean()
+            extreme_vol = atr > atr_ma * (1 + max_vega_exposure)
+            signals[extreme_vol] = 0
+        
+        # Assicurati che i segnali siano una serie con indice
+        signals.index = data.index
         
         return signals
 
@@ -162,14 +175,20 @@ class OptionsStrategy(BaseStrategy):
 
     def validate_signals(self, signals: pd.Series, data: pd.DataFrame) -> pd.Series:
         """Apply exit conditions and time-based filters"""
+        # Crea una copia dei segnali per evitare modifiche indesiderate
+        signals = signals.copy()
+        
         exit_conditions = self.strategy_config.exit_conditions
         
         # Apply profit targets and stop losses
         profit_target = exit_conditions.get("profit_target")
         stop_loss = exit_conditions.get("stop_loss")
         if profit_target or stop_loss:
-            position_value = (signals * data["close"]).cumsum()
+            # Calcola il valore cumulativo delle posizioni
+            position_value = (signals * data["close"]).fillna(0).cumsum()
+            # Trova i prezzi di entrata per ogni posizione
             entry_price = position_value.where(signals != 0).ffill()
+            entry_price = entry_price.fillna(data["close"])  # Per il primo segnale
             
             if profit_target:
                 profit_exit = (data["close"] / entry_price - 1) >= profit_target
@@ -182,9 +201,11 @@ class OptionsStrategy(BaseStrategy):
         # Apply time decay threshold if configured
         time_decay_threshold = exit_conditions.get("time_decay_threshold")
         if time_decay_threshold:
-            # In a real implementation, this would use actual option time decay
             signals = self._apply_time_decay(signals, time_decay_threshold)
-            
+        
+        # Assicurati che i segnali siano una serie con indice
+        signals.index = data.index
+        
         return signals
     
     def _apply_time_decay(self, signals: pd.Series, threshold: float) -> pd.Series:
@@ -192,11 +213,20 @@ class OptionsStrategy(BaseStrategy):
         Simulate time decay effect on positions
         In a real implementation, this would use actual option pricing
         """
-        position_duration = signals.cumsum().where(signals != 0).ffill()
-        time_decay = 1 - (position_duration / position_duration.max())
+        # Crea una copia dei segnali per evitare modifiche indesiderate
+        signals = signals.copy()
         
-        # Close positions when time decay exceeds threshold
-        signals[time_decay < threshold] = 0
+        # Calcola la durata delle posizioni
+        position_duration = signals.abs().cumsum().where(signals != 0)
+        position_duration = position_duration.ffill()
+        position_duration = position_duration.fillna(0)
+        
+        # Calcola il time decay
+        max_duration = position_duration.max()
+        if max_duration > 0:  # Evita divisione per zero
+            time_decay = 1 - (position_duration / max_duration)
+            # Chiudi le posizioni quando il time decay supera la soglia
+            signals[time_decay < threshold] = 0
         
         return signals
 
@@ -204,7 +234,12 @@ class OptionsStrategy(BaseStrategy):
         """Convert strategy state to dictionary"""
         return {
             'name': 'OptionsStrategy',
-            'genes': {name: gene.to_dict() for name, gene in self._genes.items()}
+            'genes': {name: gene.to_dict() for name, gene in self._genes.items()},
+            'params': {
+                'position_sizing': self.strategy_config.position_sizing,
+                'entry_conditions': self.strategy_config.entry_conditions,
+                'exit_conditions': self.strategy_config.exit_conditions
+            }
         }
 
     def from_dict(self, data: Dict) -> None:
@@ -217,3 +252,10 @@ class OptionsStrategy(BaseStrategy):
         for name, gene_data in data['genes'].items():
             if name in self._genes:
                 self._genes[name].from_dict(gene_data)
+        
+        # Load parameters from saved state
+        if 'params' in data:
+            params = data['params']
+            self.strategy_config.position_sizing.update(params.get('position_sizing', {}))
+            self.strategy_config.entry_conditions.update(params.get('entry_conditions', {}))
+            self.strategy_config.exit_conditions.update(params.get('exit_conditions', {}))

@@ -81,7 +81,22 @@ class ConfigLoader:
         config = self.load_config("strategies")
         if "strategies" not in config or strategy_name not in config["strategies"]:
             raise ValueError(f"Strategy {strategy_name} not found in configuration")
-        return config["strategies"][strategy_name]
+        
+        # Create a deep copy of the strategy configuration
+        import copy
+        strategy_config = copy.deepcopy(config["strategies"][strategy_name])
+        
+        # Ensure all required sections exist
+        if "position_sizing" not in strategy_config:
+            strategy_config["position_sizing"] = {"method": "fixed", "base_size": 1.0}
+        if "entry_conditions" not in strategy_config:
+            strategy_config["entry_conditions"] = {}
+        if "exit_conditions" not in strategy_config:
+            strategy_config["exit_conditions"] = {}
+        if "risk_management" not in strategy_config:
+            strategy_config["risk_management"] = {}
+            
+        return strategy_config
 
     def get_genetic_config(self) -> Dict[str, Any]:
         """Get genetic optimization configuration"""

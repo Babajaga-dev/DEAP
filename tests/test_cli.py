@@ -17,18 +17,23 @@ def sample_data(tmp_path):
     # Genera prima i prezzi base
     base_price = 100 * (1 + np.random.randn(100) * 0.02)  # 2% di volatilità
     
+    # Crea il timestamp come indice
+    timestamps = pd.date_range(start='2024-01-01', periods=100, freq='h')
+    
     # Genera i prezzi in modo coerente
-    data = pd.DataFrame({
-        'timestamp': pd.date_range(start='2024-01-01', periods=100, freq='h'),
-        'open': base_price * (1 + np.random.randn(100) * 0.001),
-        'close': base_price * (1 + np.random.randn(100) * 0.001),
-        'volume': np.random.uniform(1000000, 2000000, 100)
-    })
+    data = pd.DataFrame(index=timestamps)
+    data['open'] = base_price * (1 + np.random.randn(100) * 0.001)
+    data['close'] = base_price * (1 + np.random.randn(100) * 0.001)
+    data['volume'] = np.random.uniform(1000000, 2000000, 100)
     
     # Calcola high e low in modo coerente
     daily_range = base_price * 0.02  # 2% di range giornaliero
     data['high'] = data[['open', 'close']].max(axis=1) + abs(np.random.randn(100) * daily_range)
     data['low'] = data[['open', 'close']].min(axis=1) - abs(np.random.randn(100) * daily_range)
+    
+    # Reset dell'indice per salvare il timestamp come colonna
+    data = data.reset_index()
+    data = data.rename(columns={'index': 'timestamp'})
     
     csv_path = tmp_path / "sample_data.csv"
     data.to_csv(csv_path, index=False)
@@ -126,7 +131,9 @@ class TestCLI:
         """Test del comando optimize"""
         output_dir = tmp_path / "results"
         
-        result = runner.invoke(optimize, ['--strategy', 'options', '--data-path', str(sample_data), '--output-dir', str(output_dir)])
+        result = runner.invoke(optimize, args=['--strategy', 'options', '--data-path', str(sample_data), '--output-dir', str(output_dir)])
+        if result.exit_code != 0:
+            print(f"Error output: {result.output}")
         
         assert result.exit_code == 0
         assert any(file.suffix == '.yaml' for file in output_dir.iterdir())
@@ -145,7 +152,9 @@ class TestCLI:
         """Test del comando validate"""
         output_dir = tmp_path / "validation"
         
-        result = runner.invoke(validate, ['--strategy-path', str(strategy_results), '--data-path', str(sample_data), '--output-dir', str(output_dir)])
+        result = runner.invoke(validate, args=['--strategy-path', str(strategy_results), '--data-path', str(sample_data), '--output-dir', str(output_dir)])
+        if result.exit_code != 0:
+            print(f"Error output: {result.output}")
         
         assert result.exit_code == 0
         assert any(file.suffix == '.yaml' for file in output_dir.iterdir())
@@ -204,7 +213,9 @@ class TestCLI:
         
         # 2. Optimize strategy
         results_dir = tmp_path / "results"
-        result2 = runner.invoke(optimize, ['--strategy', 'options', '--data-path', str(processed_dir / 'train_data.parquet'), '--output-dir', str(results_dir)])
+        result2 = runner.invoke(optimize, args=['--strategy', 'options', '--data-path', str(processed_dir / 'train_data.parquet'), '--output-dir', str(results_dir)])
+        if result2.exit_code != 0:
+            print(f"Error output: {result2.output}")
         assert result2.exit_code == 0
         
         # Get the generated strategy file

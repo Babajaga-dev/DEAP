@@ -22,6 +22,24 @@ class MockStrategy(BaseStrategy):
         child2 = MockStrategy(self.config_loader)
         return child1, child2
 
+    def to_dict(self) -> dict:
+        """Convert strategy to dictionary"""
+        return {
+            'name': 'Mock Strategy',
+            'genes': {},
+            'config': {
+                'name': 'Mock Strategy',
+                'version': '1.0.0',
+                'description': None,
+                'position_sizing': {'method': 'fixed', 'base_size': 1.0},
+                'indicators': ['rsi', 'bollinger', 'atr']
+            }
+        }
+
+    def from_dict(self, data: dict) -> None:
+        """Initialize strategy from dictionary"""
+        self._genes = {}  # Reset genes
+
 @pytest.fixture
 def market_data(tmp_path):
     dates = pd.date_range(start='2024-01-01', periods=100, freq='h')

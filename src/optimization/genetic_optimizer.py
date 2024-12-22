@@ -3,6 +3,10 @@ import numpy as np
 import pandas as pd
 from deap import base, creator, tools
 from pathlib import Path
+import logging
+import copy
+
+logger = logging.getLogger(__name__)
 from ..strategies.base_strategy import BaseStrategy, StrategyConfig
 from ..utils.config_loader import ConfigLoader
 from ..data.data_loader import DataLoader
@@ -12,8 +16,19 @@ class StrategyWrapper:
     def __init__(self, strategy: BaseStrategy):
         self.strategy = strategy
         self.fitness = creator.FitnessMax()
+        self.fitness.values = (0.0,)  # Inizializza con un valore di default
 
-    def evaluate(self, data):
+    def __deepcopy__(self, memo):
+        """Implementa deep copy per il cloning corretto"""
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            setattr(result, k, copy.deepcopy(v, memo))
+        return result
+
+    def evaluate(self, data) -> dict:
+        """Evaluate strategy and return metrics"""
         return self.strategy.evaluate(data)
 
     def mutate(self):
@@ -163,10 +178,14 @@ class GeneticOptimizer:
         
         # Evaluate initial population
         for ind in pop:
-            fit = self.toolbox.evaluate(ind)
-            if not isinstance(fit[0], float):
-                fit = (float(fit[0]),)
-            ind.fitness.values = fit
+            try:
+                fit = self.toolbox.evaluate(ind)
+                if not isinstance(fit[0], float):
+                    fit = (float(fit[0]),)
+                ind.fitness.values = fit
+            except Exception as e:
+                logger.error(f"Error evaluating individual: {e}")
+                ind.fitness.values = (0.0,)
             
         # Record initial statistics
         record = stats.compile(pop)
@@ -203,10 +222,14 @@ class GeneticOptimizer:
             # Evaluate invalid individuals
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
             for ind in invalid_ind:
-                fit = self.toolbox.evaluate(ind)
-                if not isinstance(fit[0], float):
-                    fit = (float(fit[0]),)
-                ind.fitness.values = fit
+                try:
+                    fit = self.toolbox.evaluate(ind)
+                    if not isinstance(fit[0], float):
+                        fit = (float(fit[0]),)
+                    ind.fitness.values = fit
+                except Exception as e:
+                    logger.error(f"Error evaluating individual: {e}")
+                    ind.fitness.values = (0.0,)
             
             # Replace population
             pop[:] = offspring
@@ -226,7 +249,10 @@ class GeneticOptimizer:
                 callback(gen, stats_dict)
         
         best_ind = tools.selBest(pop, 1)[0]
-        return best_ind.unwrap, logbook
+        best_strategy = best_ind.unwrap
+        # Aggiungi il fitness alla strategia per il salvataggio
+        best_strategy.fitness = float(best_ind.fitness.values[0])
+        return best_strategy, logbook
     
     def validate(self, strategy: BaseStrategy) -> dict:
         """Validate strategy on test data"""
