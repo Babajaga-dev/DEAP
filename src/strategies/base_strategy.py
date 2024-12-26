@@ -231,6 +231,9 @@ class BaseStrategy(ABC):
         
     def from_dict(self, data: Dict) -> None:
         """Load strategy from dictionary representation"""
+        if data.get('name') != self.__class__.__name__:
+            raise ValueError(f"Invalid strategy type: {data.get('name')}")
+            
         # Carica il fitness se presente
         if 'fitness' in data:
             self._fitness_value = float(data['fitness'])
@@ -241,29 +244,24 @@ class BaseStrategy(ABC):
                 if name in self._genes:
                     self._genes[name].from_dict(gene_data)
                     
-        # Carica la configurazione
-        if 'config' in data:
-            config = data['config']
-            self.strategy_config.name = config.get('name', self.strategy_config.name)
-            self.strategy_config.version = config.get('version', self.strategy_config.version)
-            self.strategy_config.description = config.get('description', self.strategy_config.description)
-            self.strategy_config.position_sizing.update(config.get('position_sizing', {}))
-            self.strategy_config.indicators = config.get('indicators', self.strategy_config.indicators)
+        # Carica i parametri
+        if 'params' in data:
+            params = data['params']
+            self.strategy_config.position_sizing.update(params.get('position_sizing', {}))
+            self.strategy_config.entry_conditions.update(params.get('entry_conditions', {}))
+            self.strategy_config.exit_conditions.update(params.get('exit_conditions', {}))
+            self.strategy_config.risk_management.update(params.get('risk_management', {}))
 
     def to_dict(self) -> Dict:
         """Convert strategy to dictionary representation"""
         result = {
-            'name': self.metadata.name,
-            'version': self.metadata.version,
-            'description': self.metadata.description,
-            'indicators': self.metadata.indicators,
+            'name': self.__class__.__name__,
             'genes': {name: gene.to_dict() for name, gene in self._genes.items()},
-            'config': {
-                'name': self.strategy_config.name,
-                'version': self.strategy_config.version,
-                'description': self.strategy_config.description,
+            'params': {
                 'position_sizing': self.strategy_config.position_sizing,
-                'indicators': self.strategy_config.indicators
+                'entry_conditions': self.strategy_config.entry_conditions,
+                'exit_conditions': self.strategy_config.exit_conditions,
+                'risk_management': self.strategy_config.risk_management
             }
         }
         

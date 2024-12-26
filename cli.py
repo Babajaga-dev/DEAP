@@ -114,6 +114,8 @@ def optimize(strategy: str, data_path: str, output_dir: str):
                 return [convert_numpy_values(item) for item in obj]
             elif isinstance(obj, (np.float32, np.float64)):
                 return float(obj)
+            elif isinstance(obj, (np.int32, np.int64)):
+                return int(obj)
             return obj
 
         # Converti la strategia in dizionario e aggiungi il fitness

@@ -141,6 +141,21 @@ class ATRGene(BaseGene):
         
         return (fitness,)
     
+    @property
+    def value(self) -> float:
+        """Get the current value of the gene"""
+        if isinstance(self._value, (list, np.ndarray)):
+            return float(round(self._value[0]))
+        return float(round(self._value))
+    
+    @value.setter
+    def value(self, new_value: Any) -> None:
+        """Set the value of the gene with validation and rounding"""
+        if isinstance(new_value, (list, np.ndarray)):
+            self._value = [round(self.validate_and_clip_value(new_value[0]))]
+        else:
+            self._value = [round(self.validate_and_clip_value(new_value))]
+    
     def validate_and_clip_value(self, value: float) -> float:
         """Ensure integer periods within bounds"""
         clipped = super().validate_and_clip_value(value)

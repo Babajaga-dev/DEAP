@@ -39,11 +39,6 @@ class OptionsStrategy(BaseStrategy):
         oversold = rsi < rsi_thresholds.get("oversold", 45)  # Aumentato ulteriormente soglia oversold
         overbought = rsi > rsi_thresholds.get("overbought", 55)  # Ridotto ulteriormente soglia overbought
         
-        # Debug RSI
-        print(f"RSI range: {rsi.min():.2f} - {rsi.max():.2f}")
-        print(f"Oversold signals: {oversold.sum()}")
-        print(f"Overbought signals: {overbought.sum()}")
-        
         # Volatility conditions using ATR
         atr = self._genes["atr"].compute(data["high"], data["low"], data["close"]).fillna(0)
         vol_conditions = entry_conditions.get("volatility_conditions", {})
@@ -52,10 +47,6 @@ class OptionsStrategy(BaseStrategy):
         # Calcola la media mobile dell'ATR per confronto
         atr_ma = atr.rolling(window=20, min_periods=1).mean()
         high_volatility = (atr > min_atr) & (atr > atr_ma * 0.3)  # Ridotto ulteriormente il requisito di volatilità
-        
-        # Debug ATR
-        print(f"ATR range: {atr.min():.4f} - {atr.max():.4f}")
-        print(f"High volatility signals: {high_volatility.sum()}")
         
         # Price conditions using Bollinger Bands
         bb_upper, bb_middle, bb_lower = self._genes["bollinger"].compute(data["close"])
@@ -74,14 +65,6 @@ class OptionsStrategy(BaseStrategy):
         # Usa il threshold per filtrare i segnali deboli
         bb_width = (bb_upper - bb_lower) / bb_middle
         significant_move = bb_width > bb_width.rolling(window=20).mean() * bb_threshold
-        
-        # Debug Bollinger
-        bb_width = (bb_upper - bb_lower) / bb_middle
-        print(f"BB width range: {bb_width.min():.2f} - {bb_width.max():.2f}")
-        print(f"Price vs Upper: {((data['close'] - bb_upper) / bb_middle).max():.2f}")
-        print(f"Price vs Lower: {((bb_lower - data['close']) / bb_middle).max():.2f}")
-        print(f"Price above upper band signals: {price_above_upper.sum()}")
-        print(f"Price below lower band signals: {price_below_lower.sum()}")
         
         # Generate signals based on RSI o price conditions con conferma delle bande
         buy_puts = (overbought | price_above_upper) & significant_move & (high_volatility | (atr > min_atr))
@@ -159,13 +142,26 @@ class OptionsStrategy(BaseStrategy):
         if not isinstance(other, OptionsStrategy):
             raise ValueError("Can only crossover with another OptionsStrategy")
         
+        # Create new instances
         child1 = OptionsStrategy(self.config_loader)
         child2 = OptionsStrategy(self.config_loader)
         
+        # Perform gene crossover
         for key in self._genes:
             c1_gene, c2_gene = self._genes[key].crossover(other._genes[key])
             child1._genes[key] = c1_gene
             child2._genes[key] = c2_gene
+        
+        # Copy configuration from parents
+        child1.strategy_config.position_sizing.update(self.strategy_config.position_sizing)
+        child1.strategy_config.entry_conditions.update(self.strategy_config.entry_conditions)
+        child1.strategy_config.exit_conditions.update(self.strategy_config.exit_conditions)
+        child1.strategy_config.risk_management.update(self.strategy_config.risk_management)
+        
+        child2.strategy_config.position_sizing.update(other.strategy_config.position_sizing)
+        child2.strategy_config.entry_conditions.update(other.strategy_config.entry_conditions)
+        child2.strategy_config.exit_conditions.update(other.strategy_config.exit_conditions)
+        child2.strategy_config.risk_management.update(other.strategy_config.risk_management)
         
         return child1, child2
 

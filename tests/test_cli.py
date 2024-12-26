@@ -47,19 +47,49 @@ def strategy_results(tmp_path):
         'best_strategy': {
             'name': 'OptionsStrategy',
             'genes': {
-                'rsi': {'value': 14, 'type': 'RSIGene'},
-                'bollinger': {'value': 20, 'type': 'BollingerGene'},
-                'atr': {'value': 14, 'type': 'ATRGene'}
+                'rsi': {
+                    'type': 'RSIGene',
+                    'name': 'rsi',
+                    'value': 14
+                },
+                'bollinger': {
+                    'type': 'BollingerGene',
+                    'name': 'bollinger',
+                    'value': 20
+                },
+                'atr': {
+                    'type': 'ATRGene',
+                    'name': 'atr',
+                    'value': 14
+                }
             },
             'params': {
-                'position_sizing': {'method': 'fixed', 'base_size': 1.0},
+                'position_sizing': {
+                    'method': 'fixed',
+                    'base_size': 1.0,
+                    'volatility_multiplier': 1.0
+                },
                 'entry_conditions': {
-                    'rsi_oversold': 30,
-                    'bollinger_deviation': 2.0
+                    'rsi_thresholds': {
+                        'oversold': 30,
+                        'overbought': 70
+                    },
+                    'volatility_conditions': {
+                        'min_atr': 0.01
+                    },
+                    'price_conditions': {
+                        'bb_threshold': 0.5
+                    }
                 },
                 'exit_conditions': {
                     'profit_target': 0.05,
-                    'stop_loss': 0.02
+                    'stop_loss': 0.02,
+                    'time_decay_threshold': 0.5
+                },
+                'risk_management': {
+                    'max_positions': 3,
+                    'max_vega_exposure': 0.5,
+                    'max_position_size': 2.0
                 }
             }
         },

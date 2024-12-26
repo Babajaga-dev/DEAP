@@ -121,8 +121,8 @@ class BaseGene(ABC):
     
     def mutate(self) -> None:
         """Mutate the gene using DEAP's mutation operator"""
-        self._value, = self.toolbox.mutate(self._value)
-        self._value = [self.validate_and_clip_value(self._value[0])]
+        mutated = self.toolbox.mutate(self._value)[0]  # Prendi il primo elemento della tupla
+        self._value = [self.validate_and_clip_value(mutated[0])]
     
     def validate_and_clip_value(self, value: float) -> float:
         """Validate and clip the value to be within the allowed range"""

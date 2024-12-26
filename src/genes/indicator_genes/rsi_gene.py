@@ -93,7 +93,7 @@ class RSIGene(BaseGene):
         if isinstance(new_value, (list, np.ndarray)):
             self._value = [round(self.validate_and_clip_value(new_value[0]))]
         else:
-            self._value = round(self.validate_and_clip_value(new_value))
+            self._value = [round(self.validate_and_clip_value(new_value))]
     
     def compute(self, data: pd.Series) -> pd.Series:
         """
