@@ -2,7 +2,7 @@ backtest:
   # Parametri generali
   general:
     initial_capital: 100000
-    currency: "USD"
+    currency: "USDT"
     leverage_allowed: true
     max_leverage: 2.0
     margin_requirement: 0.5
