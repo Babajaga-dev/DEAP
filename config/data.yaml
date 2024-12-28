@@ -2,11 +2,12 @@ data:
   # Configurazione download Binance
   download:
     symbol: "BTCUSDT"
-    interval: "1m"
+    interval: "1h"
     start_date: "2024-01-01"
     end_date: null  # null per data corrente
     batch_size: 1000
     output_folder: "data/input"
+    filename: "market_data_BTC_1h.csv"  # Nome del file di output, usato anche nelle ottimizzazioni
     # Le API keys sono completamente opzionali e non necessarie per il download dei dati storici
     # Possono essere utili solo per aumentare i rate limits
     api:

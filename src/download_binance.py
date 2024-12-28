@@ -83,11 +83,11 @@ class BinanceDataDownloader:
             try:
                 batch_end = min(current_ts + batch_interval, end_ts)
                 
-                temp_klines = self.client.get_historical_klines(
+                temp_klines = self.client.klines(
                     symbol,
                     interval,
-                    start_str=current_ts,
-                    end_str=batch_end,
+                    startTime=current_ts,
+                    endTime=batch_end,
                     limit=self.BATCH_SIZE
                 )
                 
@@ -141,8 +141,9 @@ class BinanceDataDownloader:
                 gap_end = df['timestamp'][idx]
                 print(f"Gap from {gap_start} to {gap_end}")
         
-        # Salva il file
-        output_file = output_path / f"market_data_{symbol.replace('USDT', '')}_1m.csv"
+        # Salva il file usando il nome dalla configurazione
+        filename = self.config_loader.get_data_config()["data"]["download"]["filename"]
+        output_file = output_path / filename
         df.to_csv(output_file, index=False)
         print(f"\nData saved to {output_file}")
         print(f"Downloaded {len(df)} candlesticks")

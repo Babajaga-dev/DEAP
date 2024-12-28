@@ -39,6 +39,15 @@ def mock_config():
     """Fixture che fornisce una configurazione semplificata per i test"""
     return {
         "data": {
+            "download": {
+                "symbol": "BTCUSDT",
+                "interval": "1h",
+                "start_date": "2024-01-01",
+                "end_date": None,
+                "batch_size": 1000,
+                "output_folder": "data/input",
+                "filename": "market_data_BTC_1h.csv"
+            },
             "market": {
                 "required_columns": ["timestamp", "open", "high", "low", "close", "volume"],
                 "price_decimals": 8,
@@ -122,7 +131,7 @@ def test_download_historical_data(mock_client, mock_binance_response, tmp_path, 
     """Testa il download e salvataggio dei dati storici"""
     # Configura il mock del client Binance
     mock_client_instance = Mock()
-    mock_client_instance.get_historical_klines.return_value = mock_binance_response
+    mock_client_instance.klines.return_value = mock_binance_response
     mock_client.return_value = mock_client_instance
     
     # Inizializza il downloader
@@ -159,7 +168,7 @@ def test_error_handling(mock_client, config_loader):
     """Testa la gestione degli errori durante il download"""
     # Configura il mock per sollevare un'eccezione
     mock_client_instance = Mock()
-    mock_client_instance.get_historical_klines.side_effect = Exception("API Error")
+    mock_client_instance.klines.side_effect = Exception("API Error")
     mock_client.return_value = mock_client_instance
     
     downloader = BinanceDataDownloader(config_loader)
@@ -177,7 +186,7 @@ def test_empty_response_handling(mock_client, tmp_path, config_loader):
     """Testa la gestione di risposte vuote da Binance"""
     # Configura il mock per restituire una lista vuota
     mock_client_instance = Mock()
-    mock_client_instance.get_historical_klines.return_value = []
+    mock_client_instance.klines.return_value = []
     mock_client.return_value = mock_client_instance
     
     downloader = BinanceDataDownloader(config_loader)
