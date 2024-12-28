@@ -13,12 +13,15 @@ This project implements a trading system using genetic algorithms and evolutiona
 ```
 genetic-trading/
 ├── config/
-│   ├── config.yaml              # Main configuration
 │   ├── indicators.yaml          # Technical indicators parameters
 │   ├── strategies.yaml          # Strategy parameters
 │   ├── genetic.yaml             # Genetic optimization parameters
 │   ├── backtest.yaml            # Backtesting parameters
 │   └── data.yaml               # Data handling parameters
+├── data/
+│   ├── input/                  # Raw data files (CSV, Parquet)
+│   ├── output/                 # Processed data files
+│   └── cache/                  # Temporary data files
 ├── src/
 │   ├── genes/                  # Gene implementations
 │   ├── strategies/             # Trading strategies
@@ -60,51 +63,10 @@ For Windows:
 
 ## Usage
 
-### Data Preparation
+### Data Setup
 
-Process and validate historical data:
-```bash
-python cli.py prepare-data \
-  --data-path data/raw/historical_data.csv \
-  --output-dir data/processed \
-  --train-ratio 0.8
-```
-
-### Strategy Optimization
-
-Optimize a trading strategy using genetic algorithms:
-```bash
-python cli.py optimize \
-  --strategy options \
-  --data-path data/processed/train_data.parquet \
-  --output-dir results
-```
-
-Available strategies:
-- `trend_momentum`: Trend following strategy using RSI, MACD, and Bollinger Bands
-- `options`: Options strategy using RSI, Bollinger Bands, and ATR
-
-### Strategy Validation
-
-Validate an optimized strategy on test data:
-```bash
-python cli.py validate \
-  --strategy-path results/options_results_20240122_120000.yaml \
-  --data-path data/processed/test_data.parquet \
-  --output-dir validation
-```
-
-### Performance Report
-
-Generate a performance report from validation results:
-```bash
-python cli.py report \
-  --results-path validation/validation_results_20240122_120000.yaml
-```
-
-## Data Format
-
-The system expects historical data in CSV format with the following columns:
+1. Place your raw data files in the `data/input` directory
+2. The system supports CSV and Parquet formats with the following columns:
 ```
 timestamp,open,high,low,close,volume
 2024-11-14 23:00:00,9.93e-05,9.959e-05,9.93e-05,9.956e-05,91042100.1
@@ -112,11 +74,71 @@ timestamp,open,high,low,close,volume
 ...
 ```
 
+Data directories can be configured in `config/data.yaml`:
+```yaml
+data:
+  directories:
+    input: "data/input"    # Directory for raw data
+    output: "data/output"  # Directory for processed data
+    cache: "data/cache"    # Directory for temporary files
+```
+
+### Strategy Optimization
+
+Optimize a trading strategy using genetic algorithms:
+```bash
+python -m src.cli optimize --strategy trend --data data/input/test_data.parquet --generations 50
+```
+
+Available strategies:
+- `trend`: Trend following strategy using RSI, MACD, and Bollinger Bands
+- `options`: Options strategy using RSI, Bollinger Bands, and ATR
+
+### Strategy Backtest
+
+Run backtest on a saved strategy:
+```bash
+python -m src.cli backtest --strategy trend --data data/input/test_data.parquet --model saved_strategy.json
+```
+
+### Configuration Management
+
+View current configuration:
+```bash
+python -m src.cli config show --type genetic
+```
+
+Modify configuration:
+```bash
+python -m src.cli config edit --type genetic --param optimization.population_size --value 100
+```
+
+Available configuration types:
+- `genetic`: Genetic optimization parameters
+- `backtest`: Backtesting parameters
+- `data`: Data handling parameters
+- `indicators`: Technical indicators parameters
+- `strategies`: Strategy parameters
+
+### Help and Examples
+
+Show usage examples:
+```bash
+python -m src.cli examples
+```
+
+Show help for any command:
+```bash
+python -m src.cli --help
+python -m src.cli optimize --help
+python -m src.cli config --help
+```
+
 ## Configuration
 
 Each component can be configured through YAML files in the `config` directory:
 
-- `data.yaml`: Data processing parameters
+- `data.yaml`: Data processing parameters and directory paths
 - `indicators.yaml`: Technical indicator parameters
 - `strategies.yaml`: Strategy-specific parameters
 - `genetic.yaml`: Genetic optimization parameters
@@ -124,15 +146,15 @@ Each component can be configured through YAML files in the `config` directory:
 
 ## Testing
 
-Run unit tests:
+Run all tests:
 ```bash
-pytest tests/
+python -m pytest tests/
 ```
 
 Run specific test suite:
 ```bash
-pytest tests/data/test_data_loader.py
-pytest tests/strategies/test_options_strategy.py
+python -m pytest tests/data/test_data_loader.py
+python -m pytest tests/strategies/test_options_strategy.py
 ```
 
 ## License

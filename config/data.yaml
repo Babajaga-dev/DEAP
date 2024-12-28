@@ -12,6 +12,12 @@ data:
     price_decimals: 8
     volume_decimals: 2
 
+  # Directory dati
+  directories:
+    input: "data/input"    # Directory per i dati di input
+    output: "data/output"  # Directory per i dati elaborati
+    cache: "data/cache"    # Directory per la cache
+
   # Gestione dati mancanti
   preprocessing:
     handle_missing:
@@ -49,11 +55,9 @@ data:
   cache:
     enabled: true
     max_size: 1000  # number of datasets
-    directory: "cache"
     expiry: 86400  # seconds (24h)
 
   # Salvataggio
   save:
     format: "parquet"  # options: csv, parquet, pickle
     compression: "snappy"  # for parquet
-    directory: "data"
