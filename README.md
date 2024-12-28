@@ -45,7 +45,12 @@ cd genetic-trading
 pip install -r requirements.txt
 ```
 
-3. Install TA-Lib:
+3. Install Binance Connector:
+```bash
+pip install binance-connector
+```
+
+4. Install TA-Lib:
    
 For Linux:
 ```bash
@@ -82,6 +87,48 @@ data:
     output: "data/output"  # Directory for processed data
     cache: "data/cache"    # Directory for temporary files
 ```
+
+### Download Data from Binance
+
+Download historical market data from Binance using the download command:
+```bash
+python -m src.download_binance
+```
+
+The system uses the official Binance Connector library for reliable and efficient data downloading. Parameters can be configured in `config/data.yaml` under the `data.download` section:
+```yaml
+data:
+  download:
+    symbol: "BTCUSDT"          # Trading pair
+    interval: "1m"             # Timeframe (1m, 5m, 15m, 1h, 4h, 1d)
+    start_date: "2024-01-01"   # Start date
+    end_date: null             # End date (null for current date)
+    batch_size: 1000           # Number of candles per request
+    output_folder: "data/input" # Output directory
+```
+
+You can also override these parameters from command line:
+```bash
+# Download ETHUSDT 5-minute candles for February 2024
+python -m src.download_binance --symbol ETHUSDT --interval 5m --start-date 2024-02-01 --end-date 2024-02-29
+
+# Download BTCUSDT hourly data for the last 30 days
+python -m src.download_binance --symbol BTCUSDT --interval 1h
+
+# Download current month's data with custom output folder
+python -m src.download_binance --symbol BTCUSDT --start-date 2024-03-01 --output-folder data/custom_folder
+```
+
+Available parameters:
+- `--symbol`: Trading pair (e.g., BTCUSDT, ETHUSDT)
+- `--interval`: Timeframe (1m, 5m, 15m, 1h, 4h, 1d)
+- `--start-date`: Start date in YYYY-MM-DD format
+- `--end-date`: End date in YYYY-MM-DD format (optional)
+- `--output-folder`: Output directory
+
+Note: 
+- API keys are not required for downloading historical data. While they can be configured to increase rate limits, they are completely optional.
+- The system uses the official Binance Connector library which provides stable and reliable access to Binance's API with proper rate limiting and error handling.
 
 ### Strategy Optimization
 
