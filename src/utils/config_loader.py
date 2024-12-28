@@ -8,21 +8,20 @@ from pathlib import Path
 class ConfigLoader:
     """Enhanced configuration loader for all system components"""
     
-    CONFIG_FILES = [
-        'indicators.yaml',
-        'genetic.yaml',
-        'strategies.yaml',
-        'backtest.yaml'
-    ]
-    
-    def __init__(self):
-        self.config_dir = os.getenv('CONFIG_DIR') or os.path.join(
+    def __init__(self, config_dir: Optional[str | Path] = None):
+        """
+        Initialize ConfigLoader
+        
+        Args:
+            config_dir: Optional path to config directory. If not provided,
+                       will use CONFIG_DIR env var or default to config/
+        """
+        self.config_dir = str(config_dir or os.getenv('CONFIG_DIR') or os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
             'config'
-        )
+        ))
         self.setup_logging()
         self._cached_configs = {}
-        self._validate_config_files()
 
     def setup_logging(self) -> None:
         """Setup logging configuration"""
@@ -32,27 +31,18 @@ class ConfigLoader:
         )
         self.logger = logging.getLogger(__name__)
 
-    def _validate_config_files(self) -> None:
-        """Validate existence of all required configuration files"""
-        missing_files = []
-        for file_name in self.CONFIG_FILES:
-            file_path = os.path.join(self.config_dir, file_name)
-            if not os.path.exists(file_path):
-                missing_files.append(file_name)
-        
-        if missing_files:
-            raise FileNotFoundError(
-                f"Missing configuration files: {', '.join(missing_files)}"
-            )
+    def _validate_config_file(self, filename: str) -> None:
+        """Validate existence of a specific configuration file"""
+        file_path = os.path.join(self.config_dir, filename)
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"Configuration file not found: {filename}")
 
     @lru_cache(maxsize=32)
     def load_config(self, config_name: str) -> Dict[str, Any]:
         """Load a specific configuration file"""
-        config_path = os.path.join(self.config_dir, f"{config_name}.yaml")
-        
-        if not os.path.exists(config_path):
-            self.logger.error(f"Configuration file not found: {config_name}.yaml")
-            raise FileNotFoundError(f"Configuration file not found: {config_name}.yaml")
+        filename = f"{config_name}.yaml"
+        self._validate_config_file(filename)
+        config_path = os.path.join(self.config_dir, filename)
         
         try:
             with open(config_path, 'r') as file:
@@ -76,27 +66,29 @@ class ConfigLoader:
             raise ValueError(f"Indicator {indicator_name} not found in configuration")
         return config["indicators"][indicator_name]
 
-    def get_strategy_config(self, strategy_name: str) -> Dict[str, Any]:
+    def get_strategy_config(self, strategy_name: str = None) -> Dict[str, Any]:
         """Get configuration for a specific strategy"""
         config = self.load_config("strategies")
-        if "strategies" not in config or strategy_name not in config["strategies"]:
-            raise ValueError(f"Strategy {strategy_name} not found in configuration")
-        
-        # Create a deep copy of the strategy configuration
-        import copy
-        strategy_config = copy.deepcopy(config["strategies"][strategy_name])
-        
-        # Ensure all required sections exist
-        if "position_sizing" not in strategy_config:
-            strategy_config["position_sizing"] = {"method": "fixed", "base_size": 1.0}
-        if "entry_conditions" not in strategy_config:
-            strategy_config["entry_conditions"] = {}
-        if "exit_conditions" not in strategy_config:
-            strategy_config["exit_conditions"] = {}
-        if "risk_management" not in strategy_config:
-            strategy_config["risk_management"] = {}
+        if strategy_name:
+            if "strategies" not in config or strategy_name not in config["strategies"]:
+                raise ValueError(f"Strategy {strategy_name} not found in configuration")
             
-        return strategy_config
+            # Create a deep copy of the strategy configuration
+            import copy
+            strategy_config = copy.deepcopy(config["strategies"][strategy_name])
+            
+            # Ensure all required sections exist
+            if "position_sizing" not in strategy_config:
+                strategy_config["position_sizing"] = {"method": "fixed", "base_size": 1.0}
+            if "entry_conditions" not in strategy_config:
+                strategy_config["entry_conditions"] = {}
+            if "exit_conditions" not in strategy_config:
+                strategy_config["exit_conditions"] = {}
+            if "risk_management" not in strategy_config:
+                strategy_config["risk_management"] = {}
+                
+            return strategy_config
+        return config
 
     def get_genetic_config(self) -> Dict[str, Any]:
         """Get genetic optimization configuration"""
@@ -107,6 +99,14 @@ class ConfigLoader:
         """Get backtesting configuration"""
         config = self.load_config("backtest")
         return config.get("backtest", {})
+        
+    def get_data_config(self) -> Dict[str, Any]:
+        """Get data configuration"""
+        return self.load_config("data")
+
+    def get_indicators_config(self) -> Dict[str, Any]:
+        """Get indicators configuration"""
+        return self.load_config("indicators")
 
     def get_risk_params(self) -> Dict[str, Any]:
         """Get risk management parameters"""

@@ -1,266 +1,259 @@
 import pytest
 from click.testing import CliRunner
 from pathlib import Path
+import yaml
+import json
 import pandas as pd
 import numpy as np
-import yaml
-from cli import cli, prepare_data, optimize, validate, report
+from src.cli import cli, optimize, backtest, config
 
 @pytest.fixture
 def runner():
-    """Fixture per il CLI runner"""
     return CliRunner()
 
 @pytest.fixture
 def sample_data(tmp_path):
-    """Fixture che crea dati di esempio"""
-    # Genera prima i prezzi base
-    base_price = 100 * (1 + np.random.randn(100) * 0.02)  # 2% di volatilità
+    """Crea file di dati di test"""
+    # Crea dati nel formato corretto
+    data = pd.DataFrame({
+        'timestamp': pd.date_range(start='2023-01-01', periods=10, freq='D'),
+        'open': np.random.uniform(100, 110, 10).astype(np.float64),
+        'high': np.random.uniform(110, 120, 10).astype(np.float64),
+        'low': np.random.uniform(90, 100, 10).astype(np.float64),
+        'close': np.random.uniform(100, 110, 10).astype(np.float64),
+        'volume': np.random.uniform(1000, 2000, 10).astype(np.float64)
+    })
     
-    # Crea il timestamp come indice
-    timestamps = pd.date_range(start='2024-01-01', periods=100, freq='h')
+    # Assicura che high sia sempre maggiore di low
+    data['high'] = data[['high', 'low']].max(axis=1) + 1
+    data['low'] = data[['high', 'low']].min(axis=1)
     
-    # Genera i prezzi in modo coerente
-    data = pd.DataFrame(index=timestamps)
-    data['open'] = base_price * (1 + np.random.randn(100) * 0.001)
-    data['close'] = base_price * (1 + np.random.randn(100) * 0.001)
-    data['volume'] = np.random.uniform(1000000, 2000000, 100)
-    
-    # Calcola high e low in modo coerente
-    daily_range = base_price * 0.02  # 2% di range giornaliero
-    data['high'] = data[['open', 'close']].max(axis=1) + abs(np.random.randn(100) * daily_range)
-    data['low'] = data[['open', 'close']].min(axis=1) - abs(np.random.randn(100) * daily_range)
-    
-    # Reset dell'indice per salvare il timestamp come colonna
-    data = data.reset_index()
-    data = data.rename(columns={'index': 'timestamp'})
-    
-    csv_path = tmp_path / "sample_data.csv"
-    data.to_csv(csv_path, index=False)
-    return csv_path
+    # Salva come parquet per mantenere i tipi di dati
+    data_file = tmp_path / "test_data.parquet"
+    data.to_parquet(data_file)
+    return str(data_file)
 
 @pytest.fixture
-def strategy_results(tmp_path):
-    """Fixture che crea risultati di esempio per una strategia"""
-    results = {
-        'strategy_type': 'options',
-        'best_strategy': {
-            'name': 'OptionsStrategy',
-            'genes': {
-                'rsi': {
-                    'type': 'RSIGene',
-                    'name': 'rsi',
-                    'value': 14
-                },
-                'bollinger': {
-                    'type': 'BollingerGene',
-                    'name': 'bollinger',
-                    'value': 20
-                },
-                'atr': {
-                    'type': 'ATRGene',
-                    'name': 'atr',
-                    'value': 14
-                }
-            },
-            'params': {
-                'position_sizing': {
-                    'method': 'fixed',
-                    'base_size': 1.0,
-                    'volatility_multiplier': 1.0
-                },
-                'entry_conditions': {
-                    'rsi_thresholds': {
-                        'oversold': 30,
-                        'overbought': 70
+def sample_strategy(tmp_path):
+    """Crea file strategia di test"""
+    strategy_file = tmp_path / "test_strategy.json"
+    strategy_data = {
+        "name": "TrendMomentumStrategy",
+        "genes": {},
+        "params": {
+            "position_sizing": {"method": "fixed", "base_size": 1.0},
+                    "entry_conditions": {
+                        "rsi_oversold": 30,
+                        "rsi_overbought": 70,
+                        "rsi_window": 14
                     },
-                    'volatility_conditions': {
-                        'min_atr': 0.01
+                    "exit_conditions": {
+                        "take_profit": 0.05,
+                        "stop_loss": 0.02
                     },
-                    'price_conditions': {
-                        'bb_threshold': 0.5
+                    "risk_management": {
+                        "position_size": 1.0,
+                        "max_positions": 1
                     }
+        }
+    }
+    strategy_file.write_text(json.dumps(strategy_data))
+    return str(strategy_file)
+
+@pytest.fixture
+def sample_config(tmp_path):
+    """Crea file configurazione di test"""
+    # Crea directory config
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    
+    # Crea configurazioni necessarie
+    configs = {
+        "genetic.yaml": {
+            "optimization": {
+                "population_size": 50,
+                "generations": 100,
+                "crossover_prob": 0.7,
+                "mutation_prob": 0.2
+            }
+        },
+        "data.yaml": {
+            "data": {
+                "market": {
+                    "required_columns": ["open", "high", "low", "close", "volume"],
+                    "price_decimals": 2,
+                    "volume_decimals": 0
                 },
-                'exit_conditions': {
-                    'profit_target': 0.05,
-                    'stop_loss': 0.02,
-                    'time_decay_threshold': 0.5
+                "preprocessing": {
+                    "handle_missing": {"method": "forward_fill", "max_consecutive_missing": 5},
+                    "handle_outliers": {"method": "zscore", "threshold": 3},
+                    "volume_filter": {"min_volume": 0}
                 },
-                'risk_management': {
-                    'max_positions': 3,
-                    'max_vega_exposure': 0.5,
-                    'max_position_size': 2.0
+                "validation": {
+                    "price_checks": {
+                        "high_low": True,
+                        "open_close_range": True,
+                        "zero_prices": False
+                    },
+                    "volume_checks": {"max_volume": None},
+                    "timestamp_checks": {"duplicates": "error"}
                 }
             }
         },
-        'optimization_log': [
-            {
-                'generation': 0,
-                'avg': 0.5,
-                'std': 0.1,
-                'min': 0.3,
-                'max': 0.8
+        "strategies.yaml": {
+            "strategies": {
+                "trendmomentum": {
+                    "name": "TrendMomentumStrategy",
+                    "position_sizing": {"method": "fixed", "base_size": 1.0},
+                    "indicators": ["sma", "rsi"],
+            "entry_conditions": {
+                "rsi_oversold": 30,
+                "rsi_overbought": 70,
+                "rsi_window": 14
             },
-            {
-                'generation': 1,
-                'avg': 0.6,
-                'std': 0.1,
-                'min': 0.4,
-                'max': 0.9
+            "exit_conditions": {
+                "take_profit": 0.05,
+                "stop_loss": 0.02
+            },
+            "risk_management": {
+                "position_size": 1.0,
+                "max_positions": 1
             }
-        ]
+                },
+                "general": {
+                    "risk_free_rate": 0.02,
+                    "transaction_costs": 0.001
+                }
+            }
+        },
+        "indicators.yaml": {
+            "indicators": {
+                "sma": {
+                    "window": {"min": 5, "max": 200, "default": 20},
+                    "price": {"options": ["close", "open", "high", "low"]}
+                },
+                "rsi": {
+                    "window": {"min": 2, "max": 100, "default": 14},
+                    "overbought": {"min": 50, "max": 100, "default": 70},
+                    "oversold": {"min": 0, "max": 50, "default": 30}
+                }
+            }
+        },
+        "backtest.yaml": {
+            "backtest": {
+                "metrics": {
+                    "basic": ["total_return", "annual_return", "sharpe_ratio", "max_drawdown"],
+                    "advanced": ["sortino_ratio", "calmar_ratio"]
+                },
+                "costs": {
+                    "commission": {"value": 0.001, "type": "percentage"},
+                    "slippage": {"value": 0.0001, "type": "percentage"}
+                }
+            }
+        }
     }
     
-    results_path = tmp_path / "strategy_results.yaml"
-    with open(results_path, 'w') as f:
-        yaml.dump(results, f)
-    return results_path
-
-@pytest.fixture
-def validation_results(tmp_path):
-    """Fixture che crea risultati di validazione di esempio"""
-    results = {
-        'total_return': 0.15,
-        'annual_return': 0.25,
-        'sharpe_ratio': 1.5,
-        'max_drawdown': -0.1,
-        'win_rate': 0.6
-    }
+    # Salva le configurazioni
+    for filename, config in configs.items():
+        config_file = config_dir / filename
+        with open(config_file, 'w') as f:
+            yaml.dump(config, f)
     
-    results_path = tmp_path / "validation_results.yaml"
-    with open(results_path, 'w') as f:
-        yaml.dump(results, f)
-    return results_path
+    return config_dir
 
-class TestCLI:
-    def test_prepare_data(self, runner, sample_data, tmp_path):
-        """Test del comando prepare-data"""
-        output_dir = tmp_path / "processed"
-        
-        result = runner.invoke(prepare_data, [
-            '--data-path', str(sample_data),
-            '--output-dir', str(output_dir),
-            '--train-ratio', '0.8'
-        ])
-        
-        assert result.exit_code == 0
-        assert (output_dir / 'train_data.parquet').exists()
-        assert (output_dir / 'test_data.parquet').exists()
+def test_cli_help(runner):
+    """Test help command"""
+    result = runner.invoke(cli, ['--help'])
+    assert result.exit_code == 0
+    assert 'CLI per ottimizzazione genetica' in result.output
 
-    def test_prepare_data_invalid_path(self, runner, tmp_path):
-        """Test prepare-data con percorso non valido"""
-        result = runner.invoke(prepare_data, [
-            '--data-path', 'nonexistent.csv',
-            '--output-dir', str(tmp_path)
-        ])
-        
-        assert result.exit_code != 0
-        assert "Error" in result.output
+def test_optimize_command(runner, sample_data, sample_config, monkeypatch):
+    """Test optimize command"""
+    # Imposta la directory di config temporanea
+    monkeypatch.setenv('CONFIG_DIR', str(sample_config))
+    
+    result = runner.invoke(cli, [
+        'optimize',
+        '--strategy', 'trend',
+        '--data', sample_data,
+        '--generations', '10',
+        '--population', '20'
+    ])
+    # Verifica solo il codice di uscita dato che i log vanno su stderr
+    assert result.exit_code == 0
 
-    def test_optimize(self, runner, sample_data, tmp_path):
-        """Test del comando optimize"""
-        output_dir = tmp_path / "results"
-        
-        result = runner.invoke(optimize, args=['--strategy', 'options', '--data-path', str(sample_data), '--output-dir', str(output_dir)])
-        if result.exit_code != 0:
-            print(f"Error output: {result.output}")
-        
-        assert result.exit_code == 0
-        assert any(file.suffix == '.yaml' for file in output_dir.iterdir())
+def test_backtest_command(runner, sample_data, sample_strategy, sample_config, monkeypatch):
+    """Test backtest command"""
+    # Imposta la directory di config temporanea
+    monkeypatch.setenv('CONFIG_DIR', str(sample_config))
+    
+    result = runner.invoke(cli, [
+        'backtest',
+        '--strategy', 'trend',
+        '--data', sample_data,
+        '--model', sample_strategy
+    ])
+    # Verifica solo il codice di uscita dato che i log vanno su stderr
+    assert result.exit_code == 0
 
-    def test_optimize_invalid_strategy(self, runner, sample_data, tmp_path):
-        """Test optimize con strategia non valida"""
-        result = runner.invoke(optimize, [
-            '--strategy', 'invalid',
-            '--data-path', str(sample_data),
-            '--output-dir', str(tmp_path)
-        ])
-        
-        assert result.exit_code != 0
+def test_config_show(runner, sample_config, monkeypatch):
+    """Test config show command"""
+    # Imposta la directory di config temporanea
+    monkeypatch.setenv('CONFIG_DIR', str(sample_config))
+    
+    result = runner.invoke(cli, [
+        'config', 'show',
+        '--type', 'genetic'
+    ])
+    assert result.exit_code == 0
 
-    def test_validate(self, runner, sample_data, strategy_results, tmp_path):
-        """Test del comando validate"""
-        output_dir = tmp_path / "validation"
-        
-        result = runner.invoke(validate, args=['--strategy-path', str(strategy_results), '--data-path', str(sample_data), '--output-dir', str(output_dir)])
-        if result.exit_code != 0:
-            print(f"Error output: {result.output}")
-        
-        assert result.exit_code == 0
-        assert any(file.suffix == '.yaml' for file in output_dir.iterdir())
+def test_config_edit(runner, sample_config, monkeypatch):
+    """Test config edit command"""
+    # Imposta la directory di config temporanea
+    monkeypatch.setenv('CONFIG_DIR', str(sample_config))
+    
+    config_file = sample_config / "genetic.yaml"
+    result = runner.invoke(cli, [
+        'config', 'edit',
+        '--type', 'genetic',
+        '--param', 'optimization.population_size',
+        '--value', '100'
+    ])
+    assert result.exit_code == 0
+    
+    # Verifica modifica
+    with open(config_file) as f:
+        config = yaml.safe_load(f)
+        assert config['optimization']['population_size'] == 100
 
-    def test_validate_invalid_strategy_path(self, runner, sample_data, tmp_path):
-        """Test validate con percorso strategia non valido"""
-        result = runner.invoke(validate, [
-            '--strategy-path', 'nonexistent.yaml',
-            '--data-path', str(sample_data),
-            '--output-dir', str(tmp_path)
-        ])
-        
-        assert result.exit_code != 0
+def test_examples_command(runner):
+    """Test examples command"""
+    result = runner.invoke(cli, ['examples'])
+    assert result.exit_code == 0
+    assert 'Esempi di utilizzo' in result.output
 
-    def test_report(self, runner, validation_results):
-        """Test del comando report"""
-        result = runner.invoke(report, [
-            '--results-path', str(validation_results)
-        ])
-        
-        assert result.exit_code == 0
-        assert "Performance Report" in result.output
-        assert "Total Return" in result.output
+def test_invalid_strategy(runner, sample_data):
+    """Test errore con strategia invalida"""
+    result = runner.invoke(cli, [
+        'optimize',
+        '--strategy', 'invalid',
+        '--data', sample_data
+    ])
+    assert result.exit_code != 0
 
-    def test_report_invalid_path(self, runner):
-        """Test report con percorso non valido"""
-        result = runner.invoke(report, [
-            '--results-path', 'nonexistent.yaml'
-        ])
-        
-        assert result.exit_code != 0
+def test_missing_data_file(runner):
+    """Test errore con file dati mancante"""
+    result = runner.invoke(cli, [
+        'optimize',
+        '--strategy', 'trend',
+        '--data', 'nonexistent.csv'
+    ])
+    assert result.exit_code != 0
 
-    def test_cli_help(self, runner):
-        """Test del comando help"""
-        result = runner.invoke(cli, ['--help'])
-        
-        assert result.exit_code == 0
-        assert "Trading System CLI" in result.output
-        
-    def test_prepare_data_help(self, runner):
-        """Test dell'help per prepare-data"""
-        result = runner.invoke(prepare_data, ['--help'])
-        
-        assert result.exit_code == 0
-        assert "Prepare and validate data" in result.output
-
-    def test_all_commands_sequence(self, runner, sample_data, tmp_path):
-        """Test della sequenza completa di comandi"""
-        # 1. Prepare data
-        processed_dir = tmp_path / "processed"
-        result1 = runner.invoke(prepare_data, [
-            '--data-path', str(sample_data),
-            '--output-dir', str(processed_dir)
-        ])
-        assert result1.exit_code == 0
-        
-        # 2. Optimize strategy
-        results_dir = tmp_path / "results"
-        result2 = runner.invoke(optimize, args=['--strategy', 'options', '--data-path', str(processed_dir / 'train_data.parquet'), '--output-dir', str(results_dir)])
-        if result2.exit_code != 0:
-            print(f"Error output: {result2.output}")
-        assert result2.exit_code == 0
-        
-        # Get the generated strategy file
-        strategy_file = next(results_dir.glob('*.yaml'))
-        
-        # 3. Validate strategy
-        validation_dir = tmp_path / "validation"
-        result3 = runner.invoke(validate, ['--strategy-path', str(strategy_file), '--data-path', str(processed_dir / 'test_data.parquet'), '--output-dir', str(validation_dir)])
-        assert result3.exit_code == 0
-        
-        # Get the validation results file
-        validation_file = next(validation_dir.glob('*.yaml'))
-        
-        # 4. Generate report
-        result4 = runner.invoke(report, [
-            '--results-path', str(validation_file)
-        ])
-        assert result4.exit_code == 0
+def test_invalid_config_type(runner):
+    """Test errore con tipo configurazione invalido"""
+    result = runner.invoke(cli, [
+        'config', 'show',
+        '--type', 'invalid'
+    ])
+    assert result.exit_code != 0

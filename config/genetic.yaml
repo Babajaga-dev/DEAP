@@ -1,36 +1,23 @@
 optimization:
-  # Parametri di base
-  population_size: 50
-  generations: 100
-  tournament_size: 3
-  crossover_probability: 0.7
-  mutation_probability: 0.2
-  
-  # Parametri di convergenza
-  convergence_min_fitness: 0.8
-  convergence_generations: 10
-  early_stopping: true
-  
-  # Parametri di selezione
-  elitism_size: 2
-  tournament_size: 3
-  selection_pressure: 1.5
-  
-  # Parametri di mutazione
-  mutation_range: 0.2
-  mutation_distribution: "gaussian"
   adaptive_mutation: true
-  mutation_decay_rate: 0.95
-  
-  # Parametri di crossover
-  crossover_type: "uniform"  # options: uniform, single_point, two_point
-  blend_alpha: 0.5  # per crossover aritmetico
-  
-  # Parallelizzazione
-  parallel_processing: true
+  blend_alpha: 0.5
+  checkpoint_dir: checkpoints
+  convergence_generations: 10
+  convergence_min_fitness: 0.8
+  crossover_probability: 0.7
+  crossover_type: uniform
+  early_stopping: true
+  elitism_size: 2
+  generations: 100
+  log_level: INFO
   max_workers: 4
-  
-  # Logging e checkpointing
-  save_frequency: 10  # generations
-  checkpoint_dir: "checkpoints"
-  log_level: "INFO"
+  mutation_decay_rate: 0.95
+  mutation_distribution: gaussian
+  mutation_probability: 0.2
+  mutation_range: 0.2
+  parallel_processing: true
+  population_size: 50
+  save_frequency: 10
+  selection_pressure: 1.5
+  tournament_size: 3
+population_size: 100
