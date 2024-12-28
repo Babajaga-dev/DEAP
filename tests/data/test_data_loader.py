@@ -254,10 +254,8 @@ class TestDataLoader:
         # Test different formats
         formats = ['parquet', 'csv', 'pickle']
         for fmt in formats:
-            data_loader.config["save"]["format"] = fmt
-            data_loader.save_data(valid_data, f"test_data.{fmt}")
-            
-            save_path = Path(data_loader.config["save"]["directory"]) / f"test_data.{fmt}"
+            save_path = tmp_path / f"test_data.{fmt}"
+            data_loader.save_data(valid_data, save_path)
             assert save_path.exists()
             
     def test_data_rounding(self, data_loader, valid_data, tmp_path):
